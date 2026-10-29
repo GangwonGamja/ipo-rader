@@ -21,6 +21,7 @@ MAX_PER_RUN = int(os.environ.get("IPO_RADAR_AI_MAX", "20"))
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 # 무료 플랜 등에서 서버가 깨어날 때마다 하는 '따라잡기' 수집에서도 AI를 돌릴지(기본: 돌리지 않음 → 비용 반복 방지)
 AI_ON_CATCHUP = os.environ.get("IPO_RADAR_AI_ON_CATCHUP", "0") == "1"
+WORKERS = int(os.environ.get("IPO_RADAR_AI_WORKERS", "4"))  # 동시에 요약할 기업 수
 
 SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS ai_notes (
@@ -86,7 +87,7 @@ def _call(client, payload: dict, schema: dict, instruction: str) -> dict:
     """구조화 출력(JSON)으로 한 번 호출. 안전 분류기 거절 시 서버 측 대체 모델로 자동 재시도(fallbacks)."""
     kw = dict(
         model=MODEL,
-        max_tokens=8000,
+        max_tokens=16000,
         system=SYSTEM,
         output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": f"{instruction}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, default=str)}\n</input>"}],
@@ -126,30 +127,33 @@ def refresh(conn, run, company_reports: dict[str, dict], briefing: dict | None) 
     client = make_client()
     gen = skipped = 0
     errors = []
+    todo = []
     targets = sorted(company_reports.items(), key=lambda kv: kv[1].get("stage") not in ("subscription", "demand_forecast"))
     for uid, content in targets:
         payload = company_payload(content)
         h = sha(dumps(payload), 32)
         row = conn.execute("SELECT input_hash FROM ai_notes WHERE uid=? AND kind='company'", (uid,)).fetchone()
-        if row and row["input_hash"] == h:
+        if (row and row["input_hash"] == h) or len(todo) >= MAX_PER_RUN:
             skipped += 1
             continue
-        if gen >= MAX_PER_RUN:
-            skipped += 1
-            continue
-        try:
-            out = _call(client, payload, COMPANY_SCHEMA,
-                        "아래 공모 예정 기업 자료로 공부 노트를 작성하세요. watch_points·risks·talking_points는 각각 3개 이하, "
-                        "근거가 부족하면 개수를 줄이고 data_gaps에 부족한 자료를 적으세요. talking_points는 고객 상담 때 설명할 문장입니다.")
-        except Exception as e:  # 한 기업 실패가 전체를 멈추지 않게
-            errors.append(f"{content['company']['name']}: {type(e).__name__}: {e}")
-            continue
-        conn.execute("""INSERT INTO ai_notes(uid,kind,input_hash,content,model,created_at) VALUES(?,?,?,?,?,?)
-                        ON CONFLICT(uid,kind) DO UPDATE SET input_hash=excluded.input_hash, content=excluded.content,
-                          model=excluded.model, created_at=excluded.created_at""",
-                     (uid, "company", h, dumps(out), out.get("_model", MODEL), run.at))
-        conn.commit()
-        gen += 1
+        todo.append((uid, content["company"]["name"], payload, h))
+    instruction = ("아래 공모 예정 기업 자료로 공부 노트를 작성하세요. watch_points·risks·talking_points는 각각 3개 이하, "
+                   "근거가 부족하면 개수를 줄이고 data_gaps에 부족한 자료를 적으세요. talking_points는 고객 상담 때 설명할 문장입니다.")
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max(1, WORKERS)) as pool:
+        futs = [(uid, name, h, pool.submit(_call, client, payload, COMPANY_SCHEMA, instruction)) for uid, name, payload, h in todo]
+        for uid, name, h, f in futs:  # DB 쓰기는 이 스레드에서만
+            try:
+                out = f.result()
+            except Exception as e:  # 한 기업 실패가 전체를 멈추지 않게
+                errors.append(f"{name}: {type(e).__name__}: {e}")
+                continue
+            conn.execute("""INSERT INTO ai_notes(uid,kind,input_hash,content,model,created_at) VALUES(?,?,?,?,?,?)
+                            ON CONFLICT(uid,kind) DO UPDATE SET input_hash=excluded.input_hash, content=excluded.content,
+                              model=excluded.model, created_at=excluded.created_at""",
+                         (uid, "company", h, dumps(out), out.get("_model", MODEL), run.at))
+            conn.commit()
+            gen += 1
     if briefing:
         payload = {k: briefing.get(k) for k in ("week_of", "picks", "new_companies", "schedule_changes", "price_fixed",
                                                 "postponed_withdrawn", "new_risks")}

@@ -541,6 +541,32 @@ class TestAI(unittest.TestCase):
         finally:
             ai.make_client = orig
 
+    def test_parallel_partial_failure(self):
+        from ipo_radar import ai
+
+        class Flaky(FakeClaude):
+            pass
+        fake = FakeClaude()
+        real = fake.beta.messages.create
+
+        def create(**kw):
+            if "B사" in kw["messages"][0]["content"]:
+                raise RuntimeError("boom")
+            return real(**kw)
+        fake.beta.messages.create = create
+        b = json.loads(json.dumps(self.content))
+        b["company"]["name"] = "B사"
+        orig = ai.make_client
+        ai.make_client = lambda: fake
+        try:
+            r = ai.refresh(self.conn, self.run, {"u1": self.content, "u2": b}, None)
+            self.assertEqual(r["generated"], 1)
+            self.assertEqual(len(r["errors"]), 1)
+            self.assertIn("B사", r["errors"][0])
+            self.assertIn("u1", ai.load_notes(self.conn))
+        finally:
+            ai.make_client = orig
+
     def test_haiku_has_no_fallbacks(self):
         from ipo_radar import ai
         fake = FakeClaude()
