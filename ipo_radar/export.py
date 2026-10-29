@@ -105,6 +105,11 @@ def _mention_daily(conn, uid, today):
     return [{"date": d, **v} for d, v in days.items()]
 
 
+def _ai_notes(conn, real_uids: set) -> dict:
+    from .ai import load_notes
+    return {k: v for k, v in load_notes(conn).items() if k in real_uids or k == "__weekly__"}
+
+
 def build_data(conn, now: datetime | None = None) -> dict:
     now = now or datetime.now(config.KST)
     today = now.astimezone(config.KST).date()
@@ -177,6 +182,7 @@ def build_data(conn, now: datetime | None = None) -> dict:
         "calendar": cal,
         "briefings": briefs,
         "watchlist": [dict(x) for x in conn.execute("SELECT * FROM watchlist")],
+        "ai": _ai_notes(conn, {x["uid"] for x in rows if not x["is_sample"]}),
     }
 
 

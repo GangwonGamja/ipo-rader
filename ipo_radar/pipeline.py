@@ -347,6 +347,30 @@ def make_briefing(r: Run):
     return {"picks": len(picks)}
 
 
+# ---------- 7. Claude AI 요약 ----------
+
+def run_ai(r: Run):
+    from . import ai
+    try:
+        client_ok = ai.make_client()
+    except ai.NotConfigured as e:
+        set_source_status(r.conn, "claude_api", None, str(e), status="not_configured", at=r.at)
+        return {"degraded": True, "error": str(e)}
+    del client_ok
+    reports = {}
+    for row in r.conn.execute("""SELECT r.uid, r.content FROM reports r JOIN companies c USING(uid)
+                                 WHERE c.is_sample=0 AND c.kind='general' AND c.status!='withdrawn'
+                                   AND r.version=(SELECT MAX(version) FROM reports WHERE uid=r.uid)"""):
+        reports[row["uid"]] = loads(row["content"])
+    b = r.conn.execute("SELECT content FROM briefings ORDER BY week_of DESC LIMIT 1").fetchone()
+    res = ai.refresh(r.conn, r, reports, loads(b["content"]) if b else None)
+    if res["errors"] and not res["generated"]:
+        set_source_status(r.conn, "claude_api", False, res["errors"][0][:300], at=r.at)
+        return {"degraded": True, "error": res["errors"][0][:200], **res}
+    set_source_status(r.conn, "claude_api", True, at=r.at, note=f"생성 {res['generated']} · 재사용 {res['skipped']}")
+    return {**res, "degraded": bool(res["errors"])}
+
+
 # ---------- 실행 ----------
 
 def run(*, now: datetime | None = None, trigger: str = "manual", db_path=None, with_sample: bool = True,
@@ -368,6 +392,8 @@ def run(*, now: datetime | None = None, trigger: str = "manual", db_path=None, w
         r.stage("sample", sample.load, r)
     r.stage("compute", compute, r)
     r.stage("briefing", make_briefing, r)
+    if "ai" not in skip:
+        r.stage("ai", run_ai, r)
     status = r.finish()
     if "export" not in skip:
         export.write(conn, now=now, out_dir=export_dir)

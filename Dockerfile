@@ -5,6 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=Asia/Seoul \
     IPO_RADAR_OUTPUT_DIR=/var/lib/ipo-radar/www \
     IPO_RADAR_PORT=8080
 WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 COPY ipo_radar ./ipo_radar
 COPY dashboard/template.html dashboard/brand_logo.png ./dashboard/
 COPY data/seed ./data/seed

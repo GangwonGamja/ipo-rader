@@ -483,6 +483,88 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.req("/", "kim", "admin-pass-123")[0], 429)
 
 
+class FakeClaude:
+    """anthropic 클라이언트 대역: beta.messages.create 호출을 기록하고 정해진 JSON을 돌려준다."""
+
+    def __init__(self, stop="end_turn"):
+        self.calls, self.stop = [], stop
+        outer = self
+
+        class _M:
+            def create(self, **kw):
+                outer.calls.append(kw)
+                schema = kw["output_config"]["format"]["schema"]
+                if "one_liner" in schema["properties"]:
+                    body = {"one_liner": "요약", "business": "사업", "watch_points": [{"text": "a", "evidence": ["fin.annual"]}],
+                            "risks": [], "valuation_view": {"text": "판단 유보", "evidence": ["valuation"]},
+                            "talking_points": [], "data_gaps": ["재무"]}
+                else:
+                    body = {"headline": "h", "summary": "s", "highlights": [], "cautions": []}
+                blk = type("B", (), {"type": "text", "text": json.dumps(body, ensure_ascii=False)})()
+                return type("R", (), {"stop_reason": outer.stop, "content": [blk], "model": kw["model"]})()
+
+        self.beta = type("Beta", (), {"messages": _M()})()
+
+
+class TestAI(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.conn = connect(self.tmp / "ai.sqlite3")
+        self.run = type("Run", (), {"at": "2026-10-30T08:00:00+09:00"})()
+        self.content = {"company": {"name": "A사", "sector": "x", "market": None, "underwriters": None, "status": "active"},
+                        "stage": "subscription", "facts": {"fin.annual": {"value": {"2025": {"revenue": 1}}, "basis": "news_reported",
+                                                                         "source": {"publisher": "P"}, "collected_at": "t1"}},
+                        "valuation": {"verdict": "판단 유보"}, "demand": {}, "summary": {"points": [], "risks": []}}
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_generate_then_reuse_and_request_shape(self):
+        from ipo_radar import ai
+        fake = FakeClaude()
+        orig = ai.make_client
+        ai.make_client = lambda: fake
+        try:
+            r1 = ai.refresh(self.conn, self.run, {"u1": self.content}, {"week_of": "2026-10-26", "picks": []})
+            self.assertEqual((r1["generated"], r1["errors"]), (2, []))
+            kw = fake.calls[0]
+            self.assertEqual(kw["model"], "claude-opus-5-5")
+            self.assertEqual(kw["fallbacks"], "default")
+            self.assertIn("server-side-fallback-2026-07-01", kw["betas"])
+            self.assertEqual(kw["output_config"]["effort"], "medium")
+            changed = json.loads(json.dumps(self.content))
+            changed["facts"]["fin.annual"]["collected_at"] = "t2"  # 수집 시각만 바뀌면 재생성하지 않음
+            r2 = ai.refresh(self.conn, self.run, {"u1": changed}, {"week_of": "2026-10-26", "picks": []})
+            self.assertEqual((r2["generated"], r2["skipped"]), (0, 1))
+            self.assertEqual(len(fake.calls), 2)
+            self.assertEqual(ai.load_notes(self.conn)["u1"]["one_liner"], "요약")
+        finally:
+            ai.make_client = orig
+
+    def test_refusal_is_reported_not_saved(self):
+        from ipo_radar import ai
+        orig = ai.make_client
+        ai.make_client = lambda: FakeClaude(stop="refusal")
+        try:
+            r = ai.refresh(self.conn, self.run, {"u1": self.content}, None)
+            self.assertEqual(r["generated"], 0)
+            self.assertIn("거절", r["errors"][0])
+            self.assertEqual(ai.load_notes(self.conn), {})
+        finally:
+            ai.make_client = orig
+
+    def test_not_configured_without_key(self):
+        import os
+        from ipo_radar import ai
+        old = os.environ.pop("ANTHROPIC_API_KEY", None)
+        try:
+            with self.assertRaises(ai.NotConfigured):
+                ai.make_client()
+        finally:
+            if old is not None:
+                os.environ["ANTHROPIC_API_KEY"] = old
+
+
 class TestSchedule(unittest.TestCase):
     def test_next_run_monday_8_kst(self):
         self.assertEqual(next_run(datetime(2026, 10, 29, 21, tzinfo=KST)).isoformat(), "2026-11-02T08:00:00+09:00")

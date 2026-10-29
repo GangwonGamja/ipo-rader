@@ -36,6 +36,7 @@ Render 서버는 인터넷 접속이 열려 있습니다. 그래서 개발 환�
    - `DART_API_KEY`: opendart.fss.or.kr → 인증키 신청(무료, 즉시~1일)
    - `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`: developers.naver.com → 애플리케이션 등록 → 사용 API에 '검색', '데이터랩(검색어트렌드)' 추가
    - `YOUTUBE_API_KEY`: console.cloud.google.com → YouTube Data API v3 사용 설정 → 사용자 인증 정보 → API 키
+   - `ANTHROPIC_API_KEY`: console.anthropic.com → API Keys → Create Key (AI 요약·주간 AI 브리핑, 사용량 과금)
 2. 대시보드 → **데이터 관리** 탭에서 자료원별 '정상/실패'를 확인합니다.
 3. 관리자 계정이면 상단 **지금 갱신**으로 바로 다시 수집할 수 있습니다.
 
