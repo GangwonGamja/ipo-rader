@@ -541,6 +541,19 @@ class TestAI(unittest.TestCase):
         finally:
             ai.make_client = orig
 
+    def test_haiku_has_no_fallbacks(self):
+        from ipo_radar import ai
+        fake = FakeClaude()
+        orig, orig_model = ai.make_client, ai.MODEL
+        ai.make_client, ai.MODEL = (lambda: fake), "claude-haiku-5-5"
+        try:
+            ai.refresh(self.conn, self.run, {"u1": self.content}, None)
+            self.assertEqual(fake.calls[0]["model"], "claude-haiku-5-5")
+            self.assertNotIn("fallbacks", fake.calls[0])
+            self.assertNotIn("betas", fake.calls[0])
+        finally:
+            ai.make_client, ai.MODEL = orig, orig_model
+
     def test_refusal_is_reported_not_saved(self):
         from ipo_radar import ai
         orig = ai.make_client

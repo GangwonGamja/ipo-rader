@@ -351,6 +351,8 @@ def make_briefing(r: Run):
 
 def run_ai(r: Run):
     from . import ai
+    if r.trigger.startswith("catch-up") and not ai.AI_ON_CATCHUP:
+        return {"skipped_reason": "서버 재시작 직후 수집에서는 AI 요약을 건너뜀(IPO_RADAR_AI_ON_CATCHUP=1로 변경 가능)"}
     try:
         client_ok = ai.make_client()
     except ai.NotConfigured as e:

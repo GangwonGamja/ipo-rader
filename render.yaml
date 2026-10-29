@@ -19,6 +19,8 @@ services:
         value: "1"
       - key: ANTHROPIC_API_KEY         # Claude API (AI 요약·주간 AI 브리핑)
         sync: false
+      - key: IPO_RADAR_AI_MODEL        # 비용 절감: claude-haiku-5-5 (기본 claude-opus-5-5)
+        value: "claude-opus-5-5"
       - key: DART_API_KEY
         sync: false
       - key: NAVER_CLIENT_ID

@@ -17,6 +17,10 @@ from .db import dumps, iso, loads, sha
 MODEL = os.environ.get("IPO_RADAR_AI_MODEL", "claude-opus-5-5")
 EFFORT = os.environ.get("IPO_RADAR_AI_EFFORT", "medium")
 MAX_PER_RUN = int(os.environ.get("IPO_RADAR_AI_MAX", "20"))
+# 서버 측 거절 대체(fallbacks "default")를 받는 모델. 그 밖의 모델(예: claude-haiku-5-5)에는 보내지 않는다.
+FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
+# 무료 플랜 등에서 서버가 깨어날 때마다 하는 '따라잡기' 수집에서도 AI를 돌릴지(기본: 돌리지 않음 → 비용 반복 방지)
+AI_ON_CATCHUP = os.environ.get("IPO_RADAR_AI_ON_CATCHUP", "0") == "1"
 
 SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS ai_notes (
@@ -80,15 +84,16 @@ def make_client():
 
 def _call(client, payload: dict, schema: dict, instruction: str) -> dict:
     """구조화 출력(JSON)으로 한 번 호출. 안전 분류기 거절 시 서버 측 대체 모델로 자동 재시도(fallbacks)."""
-    resp = client.beta.messages.create(
+    kw = dict(
         model=MODEL,
         max_tokens=8000,
         system=SYSTEM,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
         output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": f"{instruction}\n\n<input>\n{json.dumps(payload, ensure_ascii=False, default=str)}\n</input>"}],
     )
+    if MODEL in FALLBACK_MODELS:
+        kw.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+    resp = client.beta.messages.create(**kw)
     if resp.stop_reason == "refusal":
         raise RuntimeError("모델이 요청을 거절했습니다")
     if resp.stop_reason == "max_tokens":
