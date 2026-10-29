@@ -17,10 +17,12 @@ services:
         sync: false
       - key: IPO_RADAR_BRAND           # 1=건대역지점 화면, 0=로고 없는 일반 화면
         value: "1"
-      - key: ANTHROPIC_API_KEY         # Claude API (AI 요약·주간 AI 브리핑)
+      - key: GEMINI_API_KEY            # Google Gemini API (AI 요약·주간 AI 브리핑) — aistudio.google.com에서 무료 발급
         sync: false
-      - key: IPO_RADAR_AI_MODEL        # 비용 절감: claude-haiku-5-5 (기본 claude-opus-5-5)
-        value: "claude-opus-5-5"
+      - key: IPO_RADAR_AI_PROVIDER     # gemini(기본) 또는 claude
+        value: "gemini"
+      - key: IPO_RADAR_AI_MODEL        # auto = 쓸 수 있는 Gemini Flash-Lite/Flash 자동 선택(모델 이름 직접 지정 가능)
+        value: "auto"
       - key: DART_API_KEY
         sync: false
       - key: NAVER_CLIENT_ID

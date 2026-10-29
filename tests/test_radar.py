@@ -483,27 +483,23 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.req("/", "kim", "admin-pass-123")[0], 429)
 
 
-class FakeClaude:
-    """anthropic 클라이언트 대역: beta.messages.create 호출을 기록하고 정해진 JSON을 돌려준다."""
+class FakeBackend:
+    """AI 백엔드 대역: generate 호출을 기록하고 스키마에 맞는 JSON을 돌려준다."""
 
-    def __init__(self, stop="end_turn"):
-        self.calls, self.stop = [], stop
-        outer = self
+    def __init__(self, fail_names=(), model="fake-model"):
+        self.calls, self.fail_names, self.model = [], set(fail_names), model
 
-        class _M:
-            def create(self, **kw):
-                outer.calls.append(kw)
-                schema = kw["output_config"]["format"]["schema"]
-                if "one_liner" in schema["properties"]:
-                    body = {"one_liner": "요약", "business": "사업", "watch_points": [{"text": "a", "evidence": ["fin.annual"]}],
-                            "risks": [], "valuation_view": {"text": "판단 유보", "evidence": ["valuation"]},
-                            "talking_points": [], "data_gaps": ["재무"]}
-                else:
-                    body = {"headline": "h", "summary": "s", "highlights": [], "cautions": []}
-                blk = type("B", (), {"type": "text", "text": json.dumps(body, ensure_ascii=False)})()
-                return type("R", (), {"stop_reason": outer.stop, "content": [blk], "model": kw["model"]})()
-
-        self.beta = type("Beta", (), {"messages": _M()})()
+    def generate(self, system, text, schema):
+        self.calls.append({"system": system, "text": text, "schema": schema})
+        if any(n in text for n in self.fail_names):
+            raise RuntimeError("boom")
+        if "one_liner" in schema["properties"]:
+            body = {"one_liner": "요약", "business": "사업", "watch_points": [{"text": "a", "evidence": ["fin.annual"]}],
+                    "risks": [], "valuation_view": {"text": "판단 유보", "evidence": ["valuation"]},
+                    "talking_points": [], "data_gaps": ["재무"]}
+        else:
+            body = {"headline": "h", "summary": "s", "highlights": [], "cautions": []}
+        return body, self.model
 
 
 class TestAI(unittest.TestCase):
@@ -519,89 +515,103 @@ class TestAI(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_generate_then_reuse_and_request_shape(self):
+    def _with(self, backend):
         from ipo_radar import ai
-        fake = FakeClaude()
         orig = ai.make_client
-        ai.make_client = lambda: fake
-        try:
-            r1 = ai.refresh(self.conn, self.run, {"u1": self.content}, {"week_of": "2026-10-26", "picks": []})
-            self.assertEqual((r1["generated"], r1["errors"]), (2, []))
-            kw = fake.calls[0]
-            self.assertEqual(kw["model"], "claude-opus-5-5")
-            self.assertEqual(kw["fallbacks"], "default")
-            self.assertIn("server-side-fallback-2026-07-01", kw["betas"])
-            self.assertEqual(kw["output_config"]["effort"], "medium")
-            changed = json.loads(json.dumps(self.content))
-            changed["facts"]["fin.annual"]["collected_at"] = "t2"  # 수집 시각만 바뀌면 재생성하지 않음
-            r2 = ai.refresh(self.conn, self.run, {"u1": changed}, {"week_of": "2026-10-26", "picks": []})
-            self.assertEqual((r2["generated"], r2["skipped"]), (0, 1))
-            self.assertEqual(len(fake.calls), 2)
-            self.assertEqual(ai.load_notes(self.conn)["u1"]["one_liner"], "요약")
-        finally:
-            ai.make_client = orig
+        ai.make_client = lambda: backend
+        self.addCleanup(setattr, ai, "make_client", orig)
+        return ai
+
+    def test_generate_then_reuse(self):
+        fake = FakeBackend()
+        ai = self._with(fake)
+        r1 = ai.refresh(self.conn, self.run, {"u1": self.content}, {"week_of": "2026-10-26", "picks": []})
+        self.assertEqual((r1["generated"], r1["errors"]), (2, []))
+        changed = json.loads(json.dumps(self.content))
+        changed["facts"]["fin.annual"]["collected_at"] = "t2"  # 수집 시각만 바뀌면 재생성하지 않음
+        r2 = ai.refresh(self.conn, self.run, {"u1": changed}, {"week_of": "2026-10-26", "picks": []})
+        self.assertEqual((r2["generated"], r2["skipped"]), (0, 1))
+        self.assertEqual(len(fake.calls), 2)
+        note = ai.load_notes(self.conn)["u1"]
+        self.assertEqual((note["one_liner"], note["_model"]), ("요약", "fake-model"))
 
     def test_parallel_partial_failure(self):
-        from ipo_radar import ai
-
-        class Flaky(FakeClaude):
-            pass
-        fake = FakeClaude()
-        real = fake.beta.messages.create
-
-        def create(**kw):
-            if "B사" in kw["messages"][0]["content"]:
-                raise RuntimeError("boom")
-            return real(**kw)
-        fake.beta.messages.create = create
+        ai = self._with(FakeBackend(fail_names={"B사"}))
         b = json.loads(json.dumps(self.content))
         b["company"]["name"] = "B사"
-        orig = ai.make_client
-        ai.make_client = lambda: fake
-        try:
-            r = ai.refresh(self.conn, self.run, {"u1": self.content, "u2": b}, None)
-            self.assertEqual(r["generated"], 1)
-            self.assertEqual(len(r["errors"]), 1)
-            self.assertIn("B사", r["errors"][0])
-            self.assertIn("u1", ai.load_notes(self.conn))
-        finally:
-            ai.make_client = orig
+        r = ai.refresh(self.conn, self.run, {"u1": self.content, "u2": b}, None)
+        self.assertEqual((r["generated"], len(r["errors"])), (1, 1))
+        self.assertIn("B사", r["errors"][0])
 
-    def test_haiku_has_no_fallbacks(self):
+    def test_gemini_backend_picks_model_and_strips_schema(self):
         from ipo_radar import ai
-        fake = FakeClaude()
-        orig, orig_model = ai.make_client, ai.MODEL
-        ai.make_client, ai.MODEL = (lambda: fake), "claude-haiku-5-5"
-        try:
-            ai.refresh(self.conn, self.run, {"u1": self.content}, None)
-            self.assertEqual(fake.calls[0]["model"], "claude-haiku-5-5")
-            self.assertNotIn("fallbacks", fake.calls[0])
-            self.assertNotIn("betas", fake.calls[0])
-        finally:
-            ai.make_client, ai.MODEL = orig, orig_model
+        sent = {}
 
-    def test_refusal_is_reported_not_saved(self):
+        class Models:
+            def list(self):
+                mk = lambda n, acts: type("M", (), {"name": f"models/{n}", "supported_actions": acts})()  # noqa: E731
+                return [mk("gemini-3.8-flash", ["generateContent"]), mk("gemini-3.5-flash-lite", ["generateContent"]),
+                        mk("text-embedding-004", ["embedContent"])]
+
+            def generate_content(self, model, contents, config):
+                sent.update(model=model, contents=contents, config=config)
+                return type("R", (), {"text": json.dumps({"headline": "h", "summary": "s", "highlights": [], "cautions": []})})()
+
+        be = ai.GeminiBackend(type("C", (), {"models": Models()})(), "auto")
+        self.assertEqual(be.model, "gemini-3.5-flash-lite")  # 무료 한도가 큰 Flash-Lite 우선
+        out, model = be.generate("sys", "본문", ai.WEEKLY_SCHEMA)
+        self.assertEqual((out["headline"], model), ("h", "gemini-3.5-flash-lite"))
+        cfg = sent["config"]
+        self.assertEqual(cfg.response_mime_type, "application/json")
+        self.assertEqual(cfg.system_instruction, "sys")
+        self.assertNotIn("additionalProperties", json.dumps(cfg.response_json_schema))
+        self.assertEqual(ai.GeminiBackend(type("C", (), {"models": Models()})(), "gemini-3.8-flash").model, "gemini-3.8-flash")
+
+    def test_gemini_retries_on_429_then_reports_quota(self):
+        from google.genai import errors
+
         from ipo_radar import ai
-        orig = ai.make_client
-        ai.make_client = lambda: FakeClaude(stop="refusal")
-        try:
-            r = ai.refresh(self.conn, self.run, {"u1": self.content}, None)
-            self.assertEqual(r["generated"], 0)
-            self.assertIn("거절", r["errors"][0])
-            self.assertEqual(ai.load_notes(self.conn), {})
-        finally:
-            ai.make_client = orig
+        calls = {"n": 0}
+
+        class Models:
+            def generate_content(self, model, contents, config):
+                calls["n"] += 1
+                raise errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+        waits = []
+        be = ai.GeminiBackend(type("C", (), {"models": Models()})(), "gemini-x", sleep=waits.append)
+        with self.assertRaises(RuntimeError) as cm:
+            be.generate("s", "t", ai.WEEKLY_SCHEMA)
+        self.assertIn("한도", str(cm.exception))
+        self.assertEqual((calls["n"], waits), (4, [20, 40, 60]))
+
+    def test_claude_backend_request_shape(self):
+        from ipo_radar import ai
+        seen = {}
+
+        class M:
+            def create(self, **kw):
+                seen.update(kw)
+                blk = type("B", (), {"type": "text", "text": json.dumps({"headline": "h", "summary": "s", "highlights": [], "cautions": []})})()
+                return type("R", (), {"stop_reason": "end_turn", "content": [blk], "model": kw["model"]})()
+        be = ai.ClaudeBackend(type("C", (), {"beta": type("B", (), {"messages": M()})()})(), "auto")
+        out, model = be.generate("s", "t", ai.WEEKLY_SCHEMA)
+        self.assertEqual((model, seen["fallbacks"]), ("claude-opus-5-5", "default"))
+        be2 = ai.ClaudeBackend(be.client, "claude-haiku-5-5")
+        be2.generate("s", "t", ai.WEEKLY_SCHEMA)
+        self.assertEqual(seen["model"], "claude-haiku-5-5")
 
     def test_not_configured_without_key(self):
         import os
+
         from ipo_radar import ai
-        old = os.environ.pop("ANTHROPIC_API_KEY", None)
+        saved = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY")}
         try:
             with self.assertRaises(ai.NotConfigured):
                 ai.make_client()
         finally:
-            if old is not None:
-                os.environ["ANTHROPIC_API_KEY"] = old
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
 
 
 class TestSchedule(unittest.TestCase):

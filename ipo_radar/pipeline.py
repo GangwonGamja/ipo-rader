@@ -354,11 +354,14 @@ def run_ai(r: Run):
     if r.trigger.startswith("catch-up") and not ai.AI_ON_CATCHUP:
         return {"skipped_reason": "서버 재시작 직후 수집에서는 AI 요약을 건너뜀(IPO_RADAR_AI_ON_CATCHUP=1로 변경 가능)"}
     try:
-        client_ok = ai.make_client()
+        ai.make_client()
     except ai.NotConfigured as e:
-        set_source_status(r.conn, "claude_api", None, str(e), status="not_configured", at=r.at)
+        set_source_status(r.conn, "ai_api", None, str(e), status="not_configured", at=r.at)
         return {"degraded": True, "error": str(e)}
-    del client_ok
+    except Exception as e:  # 잘못된 키, 모델 조회 실패 등
+        msg = f"{type(e).__name__}: {e}"[:300]
+        set_source_status(r.conn, "ai_api", False, msg, at=r.at)
+        return {"degraded": True, "error": msg}
     reports = {}
     for row in r.conn.execute("""SELECT r.uid, r.content FROM reports r JOIN companies c USING(uid)
                                  WHERE c.is_sample=0 AND c.kind='general' AND c.status!='withdrawn'
@@ -367,9 +370,9 @@ def run_ai(r: Run):
     b = r.conn.execute("SELECT content FROM briefings ORDER BY week_of DESC LIMIT 1").fetchone()
     res = ai.refresh(r.conn, r, reports, loads(b["content"]) if b else None)
     if res["errors"] and not res["generated"]:
-        set_source_status(r.conn, "claude_api", False, res["errors"][0][:300], at=r.at)
+        set_source_status(r.conn, "ai_api", False, res["errors"][0][:300], at=r.at)
         return {"degraded": True, "error": res["errors"][0][:200], **res}
-    set_source_status(r.conn, "claude_api", True, at=r.at, note=f"생성 {res['generated']} · 재사용 {res['skipped']}")
+    set_source_status(r.conn, "ai_api", True, at=r.at, note=f"생성 {res['generated']} · 재사용 {res['skipped']}")
     return {**res, "degraded": bool(res["errors"])}
 
 

@@ -58,7 +58,7 @@ python -W ignore -m unittest -v tests.test_radar
 | 네이버 종목토론방 | 커뮤니티 | 상장 후 종목코드 | 상장 전 기업은 해당 없음 |
 | 네이버 데이터랩 검색어트렌드 | 개인 검색 관심 추이 | 네이버 키 + 데이터랩 권한 | 키 없음 |
 | YouTube Data API v3 | 공모주 영상 수·조회·좋아요·댓글 | `YOUTUBE_API_KEY` | 키 없음 |
-| Claude API (Anthropic) | 기업별 AI 요약·상담 문장, 주간 AI 브리핑 | `ANTHROPIC_API_KEY` | 키 없음 |
+| Google Gemini API | 기업별 AI 요약·상담 문장, 주간 AI 브리핑 | `GEMINI_API_KEY` (무료 등급 있음) | 키 없음 |
 | 수요예측·청약 결과(공시·보도) | 기관 수요 강도 | 없음(DART 연결 시 자동) | 웹검색 요약으로 일부 반영 |
 
 커뮤니티 게시판(디시인사이드 등)은 직접 수집하지 않습니다. 여론은 공식 API와 공시로만 파악합니다.
@@ -109,13 +109,15 @@ IPO Radar는 기사·증권신고서에 공개된 이 근거(`valuation.underwri
 
 적용 이익의 기준(실적인지 추정인지)이 확인되지 않으면 '잠정' 판정으로 표시합니다.
 
-## Claude AI 요약
+## AI 요약 (기본: Google Gemini)
 
-`ANTHROPIC_API_KEY`가 있으면 수집이 끝날 때마다 기업별 AI 요약(한 줄 요약, 사업 설명, 주목할 점, 유의할 점, 공모가 판단 요약, 상담 문장, 부족한 자료)과 주간 AI 브리핑을 만듭니다.
-- 모델: `claude-opus-5-5`, 구조화 출력(JSON 스키마). 안전 분류기 거절 시 서버 측 대체 모델로 재시도(`fallbacks: "default"`).
+`GEMINI_API_KEY`가 있으면 수집이 끝날 때마다 기업별 AI 요약(한 줄 요약, 사업 설명, 주목할 점, 유의할 점, 공모가 판단 요약, 상담 문장, 부족한 자료)과 주간 AI 브리핑을 만듭니다.
+- 공식 SDK `google-genai`, JSON 스키마 응답. `IPO_RADAR_AI_MODEL=auto`(기본)이면 키로 쓸 수 있는 모델 목록을 조회해 Flash-Lite → Flash 순으로 고릅니다. 무료 등급의 하루 요청 한도가 큰 쪽이 먼저입니다.
+- 분당 한도 초과(429)는 20·40·60초 뒤 재시도합니다. 하루 한도를 넘으면 화면에 사유를 표시합니다. 동시 요청은 기본 2개(`IPO_RADAR_AI_WORKERS`)입니다.
 - 수집된 사실만 입력으로 주고, 문장마다 근거 키를 붙이게 합니다. AI 문장은 고객 안내 전에 원문으로 확인하세요.
-- 입력 내용이 바뀐 기업만 다시 생성합니다(비용 절감). 한 번에 새로 만드는 기업 수 상한은 `IPO_RADAR_AI_MAX`(기본 20)입니다.
-- 모델 변경: `IPO_RADAR_AI_MODEL=claude-haiku-5-5`(가장 저렴). 서버 재시작 직후 수집에서는 AI를 건너뜁니다(`IPO_RADAR_AI_ON_CATCHUP=1`로 변경). 정기 수집(월 08:00)과 관리자 '지금 갱신' 때 생성됩니다.
+- 입력 내용이 바뀐 기업만 다시 생성합니다. 한 번에 새로 만드는 기업 수 상한은 `IPO_RADAR_AI_MAX`(기본 20)입니다.
+- 서버 재시작 직후 수집에서는 AI를 건너뜁니다(`IPO_RADAR_AI_ON_CATCHUP=1`로 변경). 무료 플랜이면 1을 권합니다.
+- Claude로 바꾸려면 `IPO_RADAR_AI_PROVIDER=claude` + `ANTHROPIC_API_KEY`를 쓰고, 모델은 `IPO_RADAR_AI_MODEL`(기본 claude-opus-5-5)로 정합니다.
 
 ## 여론 파악 방식 (3갈래)
 

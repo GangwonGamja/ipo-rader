@@ -1,1 +1,2 @@
+google-genai>=2.34,<3
 anthropic>=2.3,<3
