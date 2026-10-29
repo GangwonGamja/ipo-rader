@@ -1,0 +1,22 @@
+# Docker 없이 사내 리눅스 서버에서 실행할 때 (/opt/ipo-radar 에 코드, /etc/ipo-radar.env 에 설정)
+[Unit]
+Description=IPO Radar web server (login + weekly auto refresh)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ipo
+WorkingDirectory=/opt/ipo-radar
+EnvironmentFile=/etc/ipo-radar.env
+Environment=IPO_RADAR_DB=/var/lib/ipo-radar/ipo_radar.sqlite3
+Environment=IPO_RADAR_OUTPUT_DIR=/var/lib/ipo-radar/www
+ExecStart=/usr/bin/python3 -m ipo_radar serve-prod
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ipo-radar
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

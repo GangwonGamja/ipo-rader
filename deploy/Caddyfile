@@ -1,0 +1,6 @@
+# 도메인을 .env의 DOMAIN에 넣으면 Let's Encrypt 인증서를 자동 발급·갱신합니다.
+{$DOMAIN} {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy app:8080
+}

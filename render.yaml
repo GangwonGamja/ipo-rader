@@ -1,0 +1,27 @@
+# Render 블루프린트 — GitHub 저장소를 연결하면 이 설정대로 웹 서비스가 만들어집니다.
+# 무료 플랜: 15분간 접속이 없으면 잠들고, 다음 접속 때 약 1분 뒤 깨어납니다.
+#            디스크가 유지되지 않아 재시작 때마다 처음부터 다시 수집합니다(검증용으로는 충분).
+services:
+  - type: web
+    name: ipo-radar
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /healthz
+    envVars:
+      - key: IPO_RADAR_ADMIN_USER      # 관리자 아이디
+        sync: false
+      - key: IPO_RADAR_ADMIN_PASSWORD  # 관리자 비밀번호(10자 이상)
+        sync: false
+      - key: IPO_RADAR_USERS           # (선택) 부서원 계정: 이름:해시:viewer;...
+        sync: false
+      - key: IPO_RADAR_BRAND           # 1=건대역지점 화면, 0=로고 없는 일반 화면
+        value: "1"
+      - key: DART_API_KEY
+        sync: false
+      - key: NAVER_CLIENT_ID
+        sync: false
+      - key: NAVER_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false

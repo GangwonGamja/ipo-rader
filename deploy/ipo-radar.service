@@ -1,0 +1,7 @@
+[Unit]
+Description=IPO Radar weekly run
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ipo-radar
+EnvironmentFile=/opt/ipo-radar/.env
+ExecStart=/usr/bin/python3 -m ipo_radar run --trigger schedule --recover --no-sample

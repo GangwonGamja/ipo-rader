@@ -1,0 +1,3 @@
+# crontab -e 에 추가 (서버 시간대와 무관하게 KST 기준)
+CRON_TZ=Asia/Seoul
+0 8 * * 1  cd /opt/ipo-radar && /usr/bin/flock -n /tmp/ipo-radar.lock python3 -m ipo_radar run --trigger schedule --recover --no-sample >> /var/log/ipo-radar.log 2>&1

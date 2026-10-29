@@ -1,0 +1,2797 @@
+{
+ "_설명": "2026-10-29 웹검색(요약+출처 링크)으로 확인한 실제 IPO 정보. 이 세션은 국내 사이트 원문 접속이 차단되어 원문을 직접 열람하지 못했다. 모든 값은 '웹검색 요약' 등급(신뢰도 낮음)이며, IPOSTOCK·DART 수집이 연결되면 공식 값으로 자동 대체·검증된다.",
+ "source_type": "websearch_summary",
+ "retrieved_at": "2026-10-29T23:30:00+09:00",
+ "source_note": "웹검색 요약에서 인용(원문 미열람). 문장 단위 출처 대조 필요.",
+ "companies": [
+  {
+   "name": "바로팜",
+   "sector": "헬스케어 유통 플랫폼(약국 의약품 주문·중개)",
+   "underwriters": "미래에셋증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 16400,
+      "high": 20200
+     },
+     "unit": "KRW",
+     "src": "mt"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 1780000,
+     "unit": "주",
+     "src": "mt"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 29200000000,
+      "high": 36000000000
+     },
+     "unit": "KRW",
+     "src": "fnnews_baro",
+     "note": "기사 표기 약 292억~360억원"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-10-22",
+      "end": "2026-10-28"
+     },
+     "src": "bizwatch1023"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-02",
+      "end": "2026-11-03"
+     },
+     "src": "bizwatch1023"
+    },
+    {
+     "key": "profile.business",
+     "value": "약국 대상 의약품 주문·중개 플랫폼 운영, 자체 브랜드와 의약품 생산·유통으로 사업 확장",
+     "src": "hankooki_baro",
+     "basis": "news_reported"
+    },
+    {
+     "key": "note.market_share",
+     "value": "전국 약국 90% 확보(회사 측 주장, 기사 제목)",
+     "src": "fnnews_baro",
+     "basis": "company_claim"
+    },
+    {
+     "key": "offer.float_ratio",
+     "value": 0.3038,
+     "src": "therich",
+     "note": "웹검색 요약 인용(출처 문장 미대조)"
+    },
+    {
+     "key": "sched.price_fix",
+     "value": {
+      "start": "2026-10-30",
+      "end": "2026-10-30"
+     },
+     "src": "bizwatch1023"
+    },
+    {
+     "key": "profile.summary",
+     "value": "전국 약국과 의약품 공급사를 잇는 의약품 주문·유통 플랫폼 기업",
+     "src": "bp_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "약국용 의약품 통합 주문 플랫폼, 의약품 커머스, 유통 인프라(물류)"
+      },
+      {
+       "label": "누구에게",
+       "text": "전국 약국(회사 측 90% 이상 가입) ↔ 제약사·도매상"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "플랫폼을 통한 의약품 유통·판매 매출. 수수료율 등 세부 구조는 공개 자료에서 확인되지 않음"
+      },
+      {
+       "label": "매출 구성",
+       "text": "약국 통합 플랫폼 · 커머스 · 인프라 3개 부문"
+      },
+      {
+       "label": "성장 전략",
+       "text": "AI 투자, 자체 브랜드 해외 진출, 생산시설 고도화(공모자금 사용 계획)"
+      }
+     ],
+     "src": "bp_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2023": {
+       "revenue": 11500000000.0
+      },
+      "2024": {
+       "revenue": 45500000000.0
+      },
+      "2025": {
+       "revenue": 96700000000.0,
+       "op_income": -3900000000.0
+      }
+     },
+     "src": "bp_et",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "2023 매출은 파이낸셜뉴스 115억(데일리팜 116억). 2024 영업손실은 '50억원대'로만 보도"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "op_income": 2210000000.0
+     },
+     "src": "bp_pn",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.projection",
+     "value": {
+      "2026": {
+       "revenue": 174600000000.0
+      },
+      "2028": {
+       "revenue": 281200000000.0,
+       "op_income": 30200000000.0
+      }
+     },
+     "src": "bp_pn",
+     "basis": "company_projection"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 25.3,
+      "peers": [
+       "M3(일본)",
+       "Doximity(미국)",
+       "갈레니카",
+       "한미사이언스"
+      ],
+      "earnings_basis": "forecast",
+      "earnings_label": "2027년 추정 순이익 144억·2028년 233억을 연 20% 할인해 현재가치화한 평균 129억원",
+      "applied_earnings": 12900000000.0,
+      "per_share_value": 26547,
+      "discount_low": 0.239,
+      "discount_high": 0.382,
+      "notes": [
+       "정정신고서에서 비교기업 2곳→4곳, PER 24.95→25.3배, 평가가액 26,210→26,547원으로 변경",
+       "적용 연 할인율 20%는 비바이오 특례상장 평균(19.7%)보다 소폭 높다는 분석(더스탁)",
+       "국내 직접 경쟁사(데일리팜·지오영 등)는 비상장이라 해외 의료 플랫폼을 비교기업으로 선정 — 적정성 논란(딜사이트)"
+      ]
+     },
+     "src": "bp_dp",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 12294000,
+     "src": "bp_dp",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "주관사 평가 기업가치(129억×25.3배)÷주당 평가가액 26,547원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "전국 약국의 90% 이상이 가입한 B2B 의약품 주문 플랫폼 — 약국 접점을 이미 확보한 네트워크형 사업",
+      "매출이 2023년 115억 → 2025년 967억원으로 2년 새 8배 이상 성장, 2026년 상반기 영업흑자(22억) 전환",
+      "플랫폼 위에 커머스·자체 브랜드·물류 인프라를 얹어 헬스케어 밸류체인으로 확장 중"
+     ],
+     "src": "bp_ds",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "2025년까지 영업적자 — 공모가는 2027~2028년 추정 이익에 기반",
+      "비교기업이 해외 의료 플랫폼(M3·Doximity)이라 국내 의약품 유통업 대비 배수가 높게 적용됐다는 지적",
+      "약업 정책(약가·유통 규제)과 기존 도매상과의 경쟁이 변수"
+     ],
+     "src": "bp_ds",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "매출 성장이 유통 거래액 증가(저마진)인지 플랫폼 수수료(고마진)인지 — 매출 구성과 매출총이익률은?",
+      "2026년 상반기 흑자가 일회성인지, 하반기에도 이어지는지?",
+      "2027년 순이익 144억 추정의 핵심 가정(가입 약국 수·객단가·마진)은 무엇인가?",
+      "국내 의약품 도매 상장사(배수 낮음)를 비교기업으로 쓰면 평가가액은 얼마가 되나?"
+     ],
+     "src": "bp_ds",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "국내 의약품 유통은 지오영 등 대형 도매상이 주도하며 온라인 주문 플랫폼이 빠르게 커지는 중",
+     "src": "bp_ds",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "데일리팜·지오영·온라인팜(국내, 비상장), 비교기업: M3·Doximity·갈레니카·한미사이언스",
+     "src": "bp_ds",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "동원파츠",
+   "sector": "반도체 장비 정밀부품",
+   "underwriters": "삼성증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 23000,
+      "high": 26500
+     },
+     "unit": "KRW",
+     "src": "consumernews"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": null,
+      "end": "2026-10-28"
+     },
+     "src": "bizwatch1023",
+     "note": "시작일은 검색 요약에 없음"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-02",
+      "end": "2026-11-03"
+     },
+     "src": "foxcg"
+    },
+    {
+     "key": "profile.business",
+     "value": "반도체 식각·증착·세정 장비용 정밀부품(샤워헤드, 챔버부품, 히터, 스핀척) 제조",
+     "src": "newsway_dw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "note.risk_customers",
+     "value": "거래처 확대가 과제라는 보도(주요 고객 의존 가능성)",
+     "src": "newsway_dw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.price_fix",
+     "value": {
+      "start": "2026-10-30",
+      "end": "2026-10-30"
+     },
+     "src": "etfshopping_dw"
+    },
+    {
+     "key": "profile.summary",
+     "value": "반도체 식각·증착 장비에 들어가는 샤워헤드 등 정밀부품을 글로벌 장비사에 공급하는 소부장 기업",
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "반도체 장비용 정밀부품 — 샤워헤드, 챔버부품, 히터, 스핀척"
+      },
+      {
+       "label": "누구에게",
+       "text": "램리서치·세메스·액셀리스 등 반도체 장비 제조사 (램리서치 금속 샤워헤드 공급망의 약 25~30%로 보도)"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "장비사 수주에 따른 부품 납품 매출"
+      },
+      {
+       "label": "매출 구성",
+       "text": "상위 2개 고객사 매출 80% 이상, 글로벌 장비사 비중 56.4%(2026 상반기)"
+      },
+      {
+       "label": "성장 전략",
+       "text": "램리서치향 제7공장 건설(2027~2028 양산), 글로벌 장비사 비중 70%대 확대 목표"
+      }
+     ],
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.customers",
+     "value": "램리서치, 세메스, 액셀리스 등",
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2024": {
+       "revenue": 59500000000.0,
+       "op_income": 1100000000.0
+      },
+      "2025": {
+       "revenue": 92300000000.0,
+       "op_income": 7800000000.0
+      }
+     },
+     "src": "dw_ms",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "2025 영업이익 77.5억~78억원으로 기사별 상이"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 1~9월(가결산)",
+      "revenue": 100200000000.0,
+      "op_income": 22400000000.0
+     },
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.top_customer_share",
+     "value": 0.8,
+     "src": "dw_ibt",
+     "basis": "news_reported",
+     "note": "상위 2개사 합계 80% 이상"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2030000,
+     "src": "dw_nt",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 46700000000.0,
+      "high": 53800000000.0
+     },
+     "src": "dw_nt",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "램리서치향 제7공장 건설, 차입금 상환",
+     "src": "dw_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 22.91,
+      "peers": [
+       "티씨케이",
+       "하나머티리얼즈",
+       "한솔아이원스"
+      ],
+      "earnings_basis": "actual",
+      "earnings_label": "2026년 상반기 기준 최근 12개월(LTM) 순이익 133억원",
+      "applied_earnings": 13300000000.0,
+      "per_share_value": 32783,
+      "discount_low": 0.1917,
+      "discount_high": 0.2984,
+      "notes": [
+       "확인된 최근 12개월 실적을 그대로 적용 — 미래 추정 의존 없음",
+       "공모자금: 제7공장 313억, 차입금 상환 약 147억"
+      ]
+     },
+     "src": "dw_ibt2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 9294000,
+     "src": "dw_ibt2",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "LTM 순이익 133억×22.91배÷주당 평가가액 32,783원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "램리서치 금속 샤워헤드 공급망의 약 25~30%를 맡는 것으로 보도된 국내 유일 공급사",
+      "영업이익이 2024년 11억 → 2025년 78억 → 2026년 1~9월 224억(가결산)으로 급증, 이익률 20%대",
+      "공모가 산정에 확인된 실적(LTM)을 써서 추정 의존이 없음"
+     ],
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "상위 2개 고객사 매출 비중 80% 이상 — 램리서치 발주 변화에 민감",
+      "반도체 장비 투자 사이클에 실적이 연동",
+      "단기 차입금 증가 — 공모자금 일부를 상환에 사용"
+     ],
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "2026년 이익 급증이 램리서치 특정 장비 사이클 덕분인지, 구조적 점유율 상승인지?",
+      "제7공장 완공(2027~2028) 전까지 생산능력 한계는?",
+      "비교기업(티씨케이 등) 대비 이익률·성장률이 높아 배수 22.91배가 보수적인지?"
+     ],
+     "src": "dw_ms",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "반도체 식각·증착 장비의 소모성 핵심부품 시장 — 장비 출하와 공장 가동률에 연동",
+     "src": "dw_ms",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "티씨케이, 하나머티리얼즈, 한솔아이원스(비교기업) 등 반도체 부품사",
+     "src": "dw_ms",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "넥스아이",
+   "underwriters": "한국투자증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 10500,
+      "high": 13000
+     },
+     "unit": "KRW",
+     "src": "consumernews"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-03",
+      "end": "2026-11-04"
+     },
+     "src": "foxcg",
+     "note": "한 개 집계 사이트에서만 확인"
+    },
+    {
+     "key": "profile.summary",
+     "value": "면역항암제가 듣지 않는 환자를 겨냥한 항체 신약을 개발해 글로벌 제약사에 기술이전하는 바이오 기업",
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "면역항암 불응 기전을 겨냥한 항체 신약 후보물질(대표 NXI-101, 후속 NXI-201)"
+      },
+      {
+       "label": "누구에게",
+       "text": "글로벌 제약사 — NXI-101의 글로벌 개발·상업화 권리를 일본 오노약품공업에 기술이전"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "기술이전 계약금, 개발 단계별 마일스톤, 임상시료 공급 수익. 연도별 매출 변동이 큼"
+      },
+      {
+       "label": "매출 구성",
+       "text": "매출 전액이 기술이전 관련 수익"
+      },
+      {
+       "label": "성장 전략",
+       "text": "공모자금으로 NXI-201 임상과 차세대 ADC 등 신규 파이프라인 연구, 2028년 NXI-201 기술이전으로 흑자 전환 목표(회사 계획)"
+      }
+     ],
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.listing_type",
+     "value": "기술성장특례 상장 (기술평가 A·BBB)",
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2024": {
+       "revenue": 14100000000.0,
+       "op_income": 1800000000.0
+      },
+      "2025": {
+       "revenue": 5100000000.0,
+       "op_income": -16500000000.0
+      }
+     },
+     "src": "nx_ibt",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "revenue": 3021000000.0,
+      "op_income": -2135000000.0000002
+     },
+     "src": "nx_hk",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.projection",
+     "value": {
+      "2030": {
+       "revenue": 132100000000.0,
+       "op_income": 95100000000.0
+      }
+     },
+     "src": "nx_hk",
+     "basis": "company_projection"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 5000000,
+     "src": "nx_pim",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 52500000000.0,
+      "high": 65000000000.0
+     },
+     "src": "nx_pim",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "기사에 따라 510억원으로 표기된 곳도 있음"
+    },
+    {
+     "key": "offer.market_cap_band",
+     "value": {
+      "low": 480500000000.0,
+      "high": 595000000000.0
+     },
+     "src": "nx_nw",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "NXI-201 임상, 차세대 ADC 등 신규 파이프라인 연구개발",
+     "src": "nx_nw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 19.15,
+      "peers": [
+       "유한양행",
+       "한미약품",
+       "종근당",
+       "HK이노엔"
+      ],
+      "earnings_basis": "forecast",
+      "earnings_label": "2030년 추정 순이익 약 973억원을 연 20%로 4.5년 할인한 현재가치 428억원",
+      "applied_earnings": 42800000000.0,
+      "value_total": 820300000000.0,
+      "per_share_value": 17760,
+      "discount_low": 0.268,
+      "discount_high": 0.4088,
+      "notes": [
+       "기술성장특례 기업에 소비재·기타 매출이 있는 전통 제약사를 비교기업으로 써 논란 가능성(녹색경제신문)",
+       "공모가 근거 전부가 2030년 추정 이익(기술이전 성과 전제)"
+      ]
+     },
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 45760000,
+     "src": "nx_nw",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "보도된 예상 시가총액 4,805억원÷희망 하단 10,500원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "대표 후보물질 NXI-101을 일본 오노약품공업에 글로벌 기술이전 — 외부 검증을 받은 파이프라인",
+      "면역항암제 불응 환자라는 미충족 수요 영역 겨냥",
+      "2024년 기술이전 수익으로 영업흑자(18억) 경험"
+     ],
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "매출이 기술이전 마일스톤에 의존해 연도별 변동이 큼(2025년 51억·영업손실 165억)",
+      "공모가 근거가 2030년 추정 순이익 973억 — 후속 기술이전(NXI-201 등) 성공 전제",
+      "비교기업이 전통 제약사라 신약개발사 가치평가로 적절한지 논란"
+     ],
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "NXI-101 글로벌 임상 단계와 다음 마일스톤 지급 시점·규모는?",
+      "2028년 NXI-201 기술이전 목표가 어긋나면 현금 소진 속도는?",
+      "2030년 추정 순이익 973억의 근거(계약 수·로열티율)는?"
+     ],
+     "src": "nx_ibt",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "면역항암제는 큰 시장이지만 반응률 한계 → 불응 기전 표적 항체가 차세대 영역",
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "비교기업: 유한양행·한미약품·종근당·HK이노엔(전통 제약사)",
+     "src": "nx_ibt",
+     "basis": "news_reported"
+    }
+   ],
+   "sector": "바이오(면역항암 항체 신약)"
+  },
+  {
+   "name": "제논",
+   "sector": "AI 솔루션(기업용 AI 플랫폼)",
+   "underwriters": "삼성증권",
+   "exclude_terms": [
+    "제논 가스",
+    "크세논",
+    "xenon"
+   ],
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 9700,
+      "high": 12200
+     },
+     "unit": "KRW",
+     "src": "cbci"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-04",
+      "end": "2026-11-05"
+     },
+     "src": "gongmonow",
+     "note": "38커뮤니케이션 페이지별로 10/26~30, 11/24~25로 달리 표기 — 출처 간 불일치"
+    },
+    {
+     "key": "profile.business",
+     "value": "자체 AI 플랫폼 '제노스(GenOS)' 기반 기업 AI 시스템 구축·업무 자동화",
+     "src": "cbci",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.summary",
+     "value": "자체 생성형 AI 플랫폼 'GenOS'로 기업용 AI 시스템을 구축해 주는 AI 소프트웨어 기업",
+     "src": "gn_fc",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "기업용 생성형 AI 플랫폼 GenOS 라이선스, AI 에이전트, AI 구축·컨설팅·유지보수 용역"
+      },
+      {
+       "label": "누구에게",
+       "text": "기업·기관 고객(B2B)"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "라이선스 판매 + 구축 용역 + 유지보수 매출"
+      },
+      {
+       "label": "매출 구성",
+       "text": "GenOS 라이선스 35.1% · 용역 60.9% · 하드웨어 4.0%"
+      },
+      {
+       "label": "성장 전략",
+       "text": "GPU 등 AI 인프라 확충(하단 기준 115.1억원), GenOS·원에이전트·피지컬 AI 고도화"
+      }
+     ],
+     "src": "gn_fc",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.listing_type",
+     "value": "일반상장 (기술특례 아님)",
+     "src": "gn_pp",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2025": {
+       "revenue": 11740000000.0
+      }
+     },
+     "src": "gn_ad",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기(별도)",
+      "revenue": 11760000000.0,
+      "op_income": 2200000000.0
+     },
+     "src": "gn_ad",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-10-26",
+      "end": "2026-10-30"
+     },
+     "src": "gn_pp",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2200000,
+     "src": "gn_pp",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 21300000000.0,
+      "high": 26800000000.0
+     },
+     "src": "gn_pp",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 40.96,
+      "peers": [
+       "와이즈넛",
+       "비아이매트릭스",
+       "브레인즈테크놀로지(일본)"
+      ],
+      "earnings_basis": "adjusted",
+      "earnings_label": "일부 회계상 비용을 제외한 '조정 순이익' 적용 → 할인 전 평가 시가총액 2,045.73억원",
+      "value_total": 204573000000.0,
+      "actual_value_total": 120600000000.0,
+      "notes": [
+       "같은 PER을 조정 전 실제 순이익에 적용하면 평가액 약 1,206억원(이투데이)",
+       "비교기업 PER 편차 18.29~54.52배로 큼",
+       "할인율·주당 평가가액 수치는 보도에서 확인되지 않아 평가 시총÷상장 후 주식수로 계산"
+      ]
+     },
+     "src": "gn_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 14330000,
+     "src": "gn_nt",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "FI 보유 372.9만주가 상장 후 주식의 26.02%라는 보도로 역산(시가총액 1,390~1,749억과 일치)"
+    },
+    {
+     "key": "offer.float_ratio",
+     "value": 0.2907,
+     "src": "gn_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "2026년 상반기 매출 117.6억원으로 2025년 연간 매출을 반년 만에 넘김, 영업이익률 18.7%",
+      "자체 플랫폼 GenOS 라이선스 비중이 35.1%로 상승 — 용역 위주에서 제품형으로 전환 중",
+      "기술특례가 아닌 일반상장(흑자 기업)"
+     ],
+     "src": "gn_fc",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "공모가 산정에 조정 순이익을 써서 실제 순이익 기준보다 평가가 약 70% 높음",
+      "매출의 60.9%가 용역 — 인력 투입형이라 이익률 변동 가능",
+      "FI가 주당 3,000원에 투자, 상장 첫날 유통 물량 29.07%(약 191억 규모 대기 보도)"
+     ],
+     "src": "gn_fc",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "조정 순이익에서 뺀 비용(주식보상비용 등)이 반복적인 비용인가?",
+      "하반기 매출 인식 패턴 — 연간 실적이 상반기 추세를 유지하나?",
+      "GenOS 라이선스 매출의 고객 수와 재계약률은?"
+     ],
+     "src": "gn_fc",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "기업용 생성형 AI 구축 시장 — 대기업·공공 AX 수요 확대, 경쟁 치열",
+     "src": "gn_fc",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "와이즈넛, 비아이매트릭스(국내 비교기업), 브레인즈테크놀로지(일본)",
+     "src": "gn_fc",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "영광와이케이엠씨",
+   "sector": "반도체·디스플레이 장비 부품",
+   "underwriters": "대신증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 9400,
+      "high": 11000
+     },
+     "unit": "KRW",
+     "src": "dailyinvest"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-04",
+      "end": "2026-11-05"
+     },
+     "src": "gongmonow"
+    },
+    {
+     "key": "profile.business",
+     "value": "반도체·디스플레이 제조장비 핵심부품(정밀가공·표면처리·세정), 1989년 설립",
+     "src": "dailyinvest",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.summary",
+     "value": "반도체·디스플레이 제조장비의 핵심부품을 정밀가공·표면처리하는 1989년 설립 부품 기업",
+     "src": "yk_ns",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "반도체·디스플레이 장비 핵심부품 정밀가공, 표면처리(무전해니켈도금 등), 세정"
+      },
+      {
+       "label": "누구에게",
+       "text": "반도체·디스플레이 장비 제조사"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "부품 가공·처리 매출. 가동률에 따라 이익 변동이 큼(회사 설명)"
+      },
+      {
+       "label": "성장 전략",
+       "text": "제3·4공장 매입, 도금라인·정밀가공 장비 도입에 150억원"
+      }
+     ],
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2023": {
+       "revenue": 26135000000.000004
+      },
+      "2024": {
+       "revenue": 37059000000.0
+      },
+      "2025": {
+       "revenue": 51609000000.0,
+       "op_income": 4476000000.0
+      }
+     },
+     "src": "yk_nt",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "2023·2024년 영업적자(금액 미보도)"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "revenue": 38625000000.0,
+      "op_income": 7948000000.0
+     },
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-10-27",
+      "end": "2026-11-02"
+     },
+     "src": "yk_ns",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2300000,
+     "src": "yk_ns",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "시설자금 150억원(공장 매입·설비), 운영자금 약 17억원",
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 22.91,
+      "peers": [
+       "한솔아이원스",
+       "원익QnC",
+       "코미코",
+       "하나머티리얼즈"
+      ],
+      "earnings_basis": "unknown",
+      "earnings_label": "적용 이익의 기준(실적/추정) 보도에서 미확인",
+      "per_share_value": 15254,
+      "discount_low": 0.2789,
+      "discount_high": 0.3838,
+      "notes": [
+       "주관사 할인율 27.89~38.38%는 동원파츠(19.17~29.84%)보다 큰 편"
+      ]
+     },
+     "src": "yk_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "매출이 2023년 261억 → 2025년 516억원, 2026년 상반기만 386억원으로 빠르게 성장",
+      "2025년 흑자 전환 후 2026년 상반기 영업이익 79억원으로 이미 전년 연간 초과",
+      "1989년 설립 — 정밀가공·표면처리·세정까지 일괄 처리"
+     ],
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "2023~2024년 영업적자 — 이익 체력이 최근에 생김",
+      "가동률이 떨어지면 영업이익이 매출보다 크게 줄어드는 구조(회사 설명)",
+      "전방 반도체·디스플레이 투자 사이클 의존"
+     ],
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "주관사가 적용한 순이익이 2025년 실적인지, 2026년 LTM인지, 추정치인지?",
+      "2026년 상반기 급성장의 주요 고객·제품은?",
+      "제3·4공장 매입 후 감가상각 증가가 이익률에 주는 영향은?"
+     ],
+     "src": "yk_nt",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "반도체·디스플레이 장비 부품의 가공·표면처리·세정 서비스 시장",
+     "src": "yk_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "한솔아이원스, 원익QnC, 코미코, 하나머티리얼즈(비교기업)",
+     "src": "yk_nt",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "옵토닉스",
+   "sector": "방산 광학부품(관성항법 자이로 센서)",
+   "underwriters": "한국투자증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 10000,
+      "high": 12000
+     },
+     "unit": "KRW",
+     "src": "cbci"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-05",
+      "end": "2026-11-06"
+     },
+     "src": "gongmonow"
+    },
+    {
+     "key": "profile.summary",
+     "value": "미사일·전차의 관성항법장치에 들어가는 자이로 센서용 특수 광학부품을 만드는 방산 부품 기업",
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "관성항법장치(INS)의 자이로 센서 핵심 광학부품 — 링레이저자이로(RLG) 부품, 광섬유자이로(FOG) 부품"
+      },
+      {
+       "label": "누구에게",
+       "text": "한화에어로스페이스 등 방산 체계업체 → 다연장로켓·전차 등에 탑재"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "부품 납품 매출(방산 체계업체 수주 물량에 연동)"
+      },
+      {
+       "label": "매출 구성",
+       "text": "RLG 부품이 매출의 약 3분의 2"
+      },
+      {
+       "label": "성장 전략",
+       "text": "FOG 핵심부품(광섬유 고리) 생산라인 신설(141.8억원), 2028년부터 공급 목표"
+      }
+     ],
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.customers",
+     "value": "한화에어로스페이스 (매출 비중 80% 후반~89%, 출처별 상이)",
+     "src": "op_bl",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.top_customer_share",
+     "value": 0.89,
+     "src": "op_gw",
+     "basis": "news_reported",
+     "note": "블로그 89%, 다른 기사 80% 후반 — 투자설명서 확인 필요"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026 상반기 기준 LTM",
+      "op_income": 2663000000.0,
+      "ebitda": 5276000000.0
+     },
+     "src": "op_bl",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-10-21",
+      "end": "2026-10-27"
+     },
+     "src": "op_np",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.listing",
+     "value": {
+      "start": "2026-11-17",
+      "end": "2026-11-17"
+     },
+     "src": "op_np",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2200000,
+     "src": "op_np",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 22000000000.0,
+      "high": 26400000000.0
+     },
+     "src": "op_np",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.market_cap_band",
+     "value": {
+      "low": 95700000000.0,
+      "high": 114800000000.0
+     },
+     "src": "op_np",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "FOG 핵심부품(광섬유 고리) 생산라인 신설 141.8억원",
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.price_final",
+     "value": 12000,
+     "src": "op_np2",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "demand.competition_ratio",
+     "value": 1201.81,
+     "src": "op_np2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "demand.lockup_commit_ratio",
+     "value": 0.0562,
+     "src": "op_np2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.float_ratio",
+     "value": 0.2271,
+     "src": "op_ds",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "EV/EBITDA",
+      "multiple": 25.27,
+      "peers": [],
+      "earnings_basis": "actual",
+      "earnings_label": "2026년 상반기까지 최근 12개월(LTM) EBITDA 52.76억원, 공모자금 유입 반영 순차입금 조정",
+      "applied_earnings": 5276000000.0,
+      "value_total": 139800000000.0,
+      "per_share_value": 14615,
+      "discount_low": 0.178,
+      "discount_high": 0.31,
+      "notes": [
+       "적용 배수 25.27배는 블로그 기재값(신뢰도 낮음), 비교기업 목록 미확인",
+       "확정 공모가 12,000원 = 주당 평가가액 대비 17.9% 할인"
+      ]
+     },
+     "src": "op_nt2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 9567000,
+     "src": "op_np2",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "확정 시가총액 약 1,148억원÷확정 공모가 12,000원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "관성항법장치 자이로 센서용 특수 광학부품 — 방산 체계에 들어가는 진입장벽 높은 부품",
+      "K-방산 수출 확대로 FOG 부품 수요 증가, 공모자금 141.8억원으로 FOG 핵심부품 라인 신설",
+      "기관 수요예측 1,201.81 대 1, 밴드 상단 확정"
+     ],
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "한화에어로스페이스 매출 의존 80% 후반~89%",
+      "EV/EBITDA 25배대는 영업이익(LTM 26.6억) 대비 높은 배수 — 감가상각이 커서 EBITDA를 택한 점 유의",
+      "의무보유확약 5.62%로 낮고, 상장 1개월 뒤 약 36만주 보호예수 해제(딜사이트)"
+     ],
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "FOG 신규 라인(2028년 공급 목표)이 차질 없이 양산되면 매출 규모는?",
+      "한화에어로스페이스 외 고객 다변화 계획이 있는가?",
+      "영업이익 대비 감가상각 규모와 향후 설비투자 부담은?"
+     ],
+     "src": "op_pim",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "관성항법(INS) 시장은 방산·항공우주 수요 기반, RLG에서 FOG로 기술 전환 진행",
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "국내 상장 비교 가능 기업 제한적(비교기업 목록 미확인)",
+     "src": "op_pim",
+     "basis": "news_reported"
+    },
+    {
+     "key": "demand.above_top_ratio",
+     "value": 1.0,
+     "src": "op_np2",
+     "basis": "news_reported",
+     "note": "기관 신청 물량 전부 밴드 상단 이상(가격 미제시 포함)"
+    }
+   ]
+  },
+  {
+   "name": "다비오",
+   "facts": [
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-10",
+      "end": "2026-11-11"
+     },
+     "src": "gongmonow"
+    },
+    {
+     "key": "profile.summary",
+     "value": "위성·항공·드론 영상을 AI로 분석해 지형·시설 변화를 찾아 주는 공간정보 AI 기업",
+     "src": "db_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "AI 영상 분석 솔루션(공간데이터 변화 탐지), 'Spatial OS' 플랫폼"
+      },
+      {
+       "label": "누구에게",
+       "text": "공공기관·기업 등 공간정보 수요처"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "솔루션·데이터 분석 사업 매출. 아직 영업적자"
+      },
+      {
+       "label": "성장 전략",
+       "text": "R&D 인력(49.1억), GPU 등 연구 인프라(45억), 위성영상 확보(23억)"
+      }
+     ],
+     "src": "db_ibt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.listing_type",
+     "value": "기술성장특례(이익미실현) — 공모가는 2028년 추정 순이익 기준",
+     "src": "db_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2023": {
+       "revenue": 3470000000.0000005
+      },
+      "2024": {
+       "revenue": 4780000000.0
+      },
+      "2025": {
+       "revenue": 9250000000.0
+      }
+     },
+     "src": "db_ibt",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "영업적자 지속(금액 미보도)"
+    },
+    {
+     "key": "note.risk_loss",
+     "value": "설립 이후 흑자 이력 없음(기술특례)",
+     "src": "db_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 12300,
+      "high": 16600
+     },
+     "src": "db_gw",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 1000000,
+     "src": "db_gw",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.shares_new",
+     "value": 1000000,
+     "src": "db_gw",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.shares_old",
+     "value": 0,
+     "src": "db_gw",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-11-02",
+      "end": "2026-11-06"
+     },
+     "src": "db_gw",
+     "basis": "news_reported",
+     "note": "다른 자료와 일정 불일치 — 확인 필요"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 12300000000,
+      "high": 16600000000
+     },
+     "src": "db_gw",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "R&D 인력 인건비 49.1억, GPU 등 연구 인프라 45억, 위성영상 확보 23억",
+     "src": "db_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 30.87,
+      "peers": [
+       "비아이매트릭스(52.74배)",
+       "슈어소프트테크 등 3곳"
+      ],
+      "earnings_basis": "forecast",
+      "earnings_label": "2028년 추정 순이익 74.72억원(정정 후, 최초 90.43억)을 현재가치화",
+      "applied_earnings": 7472000000.0,
+      "per_share_value": 18563,
+      "discount_low": 0.1057,
+      "discount_high": 0.3374,
+      "notes": [
+       "최초 신고서: PER 26.70배·주당 19,434원·할인율 14.58~36.71%(IB토마토)",
+       "금감원 정정요구 후 추정 순이익 17% 하향, 비교기업 3곳으로 축소, 평균 PER 30.87배로 상승(블로그 정리)",
+       "PER 편차 큼: 비아이매트릭스 52.74배 vs 나머지 19.70·20.18배"
+      ]
+     },
+     "src": "db_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "위성·항공·드론 영상 AI 분석 — 공간정보 변화 탐지 수요(국방·국토·도시)",
+      "매출이 2023년 34.7억 → 2025년 92.5억원으로 2.7배 성장",
+      "공모 전량 신주 — 자금 전액 R&D·인프라에 투입"
+     ],
+     "src": "db_nt2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "설립 이후 흑자 이력 없음, 공모가는 2028년 추정 순이익 전제",
+      "정정 과정에서 추정 이익이 17% 낮아졌는데 공모가 밴드는 유지",
+      "고PER 비교기업 1곳이 평균 배수를 끌어올림"
+     ],
+     "src": "db_nt2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "2028년 순이익 74.72억을 위한 매출 가정과 성장률은?",
+      "공공 수요 의존도와 계약 구조(일회성 프로젝트 vs 구독형)는?",
+      "고PER 비교기업을 빼면 평가가액이 밴드 하단보다 낮아지는가?"
+     ],
+     "src": "db_nt2",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "공간정보 AI — 위성 데이터 증가와 국방·공공 수요로 성장 초기 시장",
+     "src": "db_nt2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "비교기업: 비아이매트릭스, 슈어소프트테크, 와이즈넛, 웨이버스 등",
+     "src": "db_nt2",
+     "basis": "news_reported"
+    }
+   ],
+   "sector": "AI 공간정보",
+   "underwriters": "대신증권"
+  },
+  {
+   "name": "케이엠에프",
+   "sector": "효소·신소재",
+   "underwriters": "IBK투자증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 15000,
+      "high": 17800
+     },
+     "unit": "KRW",
+     "src": "newstomato_kmf"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2000000,
+     "unit": "주",
+     "src": "newstomato_kmf"
+    },
+    {
+     "key": "offer.shares_new",
+     "value": 2000000,
+     "unit": "주",
+     "src": "newstomato_kmf",
+     "note": "전량 신주"
+    },
+    {
+     "key": "offer.shares_old",
+     "value": 0,
+     "unit": "주",
+     "src": "newstomato_kmf"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-11-24",
+      "end": "2026-11-25"
+     },
+     "src": "newstomato_kmf"
+    },
+    {
+     "key": "profile.summary",
+     "value": "발효·효소 기술로 건강기능식품용 기능성 소재를 만들어 식품 브랜드사에 공급하는 B2B 소재 기업",
+     "src": "km_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "효소 제품, 콤부차 분말, 애플사이다비니거 분말 등 발효 기반 기능성 식품소재"
+      },
+      {
+       "label": "누구에게",
+       "text": "식품·건강기능식품 브랜드사(B2B)"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "소재 원료 공급 매출(OEM/ODM 성격). 2025 영업이익률 55%대"
+      },
+      {
+       "label": "매출 구성",
+       "text": "최대 고객사 1곳이 매출의 72~75%"
+      },
+      {
+       "label": "성장 전략",
+       "text": "경산 제2공장 증설, 신규 기능성 소재 R&D"
+      }
+     ],
+     "src": "km_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2023": {
+       "revenue": 7200000000.0,
+       "op_income": 1100000000.0
+      },
+      "2024": {
+       "revenue": 17600000000.0,
+       "op_income": 6700000000.0
+      },
+      "2025": {
+       "revenue": 25800000000.0,
+       "op_income": 14400000000.0
+      }
+     },
+     "src": "km_bl",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "2025 영업이익 144억(기사)·142억(위키백과)"
+    },
+    {
+     "key": "fin.top_customer_share",
+     "value": 0.7217,
+     "src": "km_et",
+     "basis": "news_reported",
+     "note": "더스탁은 75%로 표기"
+    },
+    {
+     "key": "note.risk_customers",
+     "value": "최대 고객사 1곳 매출 비중 72~75%(출처별 상이)",
+     "src": "km_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 18.53,
+      "peers": [
+       "셀로맥스사이언스",
+       "아미노로직스",
+       "바이오에프디엔씨"
+      ],
+      "earnings_basis": "unknown",
+      "earnings_label": "적용 이익·주당 평가가액·할인율 보도에서 미확인",
+      "notes": [
+       "예심 단계 비교기업 현대바이오랜드(PER 8.86배)·노바렉스(4.34배)가 최종에서 빠져 배수가 높아졌다는 분석",
+       "참고: 공모가 기준 시가총액(1,272~1,510억) ÷ 2025년 영업이익 144억 = 약 8.8~10.5배(순이익 기준 아님)"
+      ]
+     },
+     "src": "km_ts2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 8480000,
+     "src": "km_ts2",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "보도된 시가총액 1,272억원÷희망 하단 15,000원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "2025년 영업이익률 55.8% — 식품소재 업종에서 이례적으로 높은 수익성",
+      "매출 2023년 72억 → 2025년 258억원, 영업이익 11억 → 144억원",
+      "항비만 등 신규 기능성 소재로 성장축 확대 계획"
+     ],
+     "src": "km_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "최대 거래처 1곳 매출 비중 72~76%",
+      "저PER 비교기업이 최종 피어에서 빠져 적용 배수가 높아졌다는 지적",
+      "고마진의 지속성 — 단일 고객 제품 히트에 기댄 실적일 가능성"
+     ],
+     "src": "km_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "최대 고객사(A사)와의 계약 기간·단가 조건은?",
+      "55% 영업이익률의 원천(원가 구조·제품 믹스)은?",
+      "경산 제2공장 가동 후 고정비 증가 영향은?"
+     ],
+     "src": "km_et",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "건강기능식품·식품 브랜드사에 원료를 공급하는 기능성 소재(B2B) 시장",
+     "src": "km_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "셀로맥스사이언스, 아미노로직스, 바이오에프디엔씨(최종 비교기업)",
+     "src": "km_et",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "케이티이",
+   "market": "KOSDAQ",
+   "underwriters": "NH투자증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 19000,
+      "high": 23000
+     },
+     "unit": "KRW",
+     "src": "newspim_kte"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2816000,
+     "unit": "주",
+     "src": "newspim_kte"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 53500000000,
+      "high": 64800000000
+     },
+     "unit": "KRW",
+     "src": "newspim_kte",
+     "note": "기사 표기 약 535억~648억원"
+    },
+    {
+     "key": "sched.demand_forecast",
+     "value": {
+      "start": "2026-12-02",
+      "end": "2026-12-08"
+     },
+     "src": "newspim_kte"
+    },
+    {
+     "key": "sched.subscription",
+     "value": {
+      "start": "2026-12-14",
+      "end": "2026-12-15"
+     },
+     "src": "newspim_kte"
+    },
+    {
+     "key": "filing.registration",
+     "value": "2026-10-28 금융위원회 증권신고서 제출(보도 기준, 28일/29일 표기 혼재)",
+     "src": "the_stock_kte",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.summary",
+     "value": "선박·함정의 전력 제어·추진 시스템을 만드는 1979년 설립 전력제어 기업, 데이터센터 전력으로 확장 중",
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "파워·제어 솔루션(배전반 등), 추진기 솔루션, 방산 솔루션, 유지·보수·정비(MRO)"
+      },
+      {
+       "label": "누구에게",
+       "text": "한화오션·HD현대중공업·삼성중공업 등 조선 3사, 대한민국 해군. 슈나이더케이티이(합작사)로 데이터센터 배전반 공급"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "선박·함정 건조 프로젝트 수주 납품 + MRO 서비스 매출"
+      },
+      {
+       "label": "성장 전략",
+       "text": "생산설비 확충, 미국 조선 공급망 진입, 해외 방산, 데이터센터 전력 시장"
+      }
+     ],
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.customers",
+     "value": "한화오션, HD현대중공업, 삼성중공업, 대한민국 해군",
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2025": {
+       "revenue": 173900000000.0,
+       "op_income": 17900000000.0
+      }
+     },
+     "src": "kt_np",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "연결 기준"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기(연결)",
+      "revenue": 82900000000.0,
+      "op_income": 7800000000.0,
+      "net_income": 8300000000.0
+     },
+     "src": "kt_np",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "1979년 설립, 조선 3사와 해군을 고객으로 둔 선박·함정 전력제어 전문",
+      "2025년 매출 1,739억·영업이익 179억(이익률 10.3%), 2026년 상반기 순이익 83억",
+      "슈나이더 일렉트릭 합작사로 데이터센터 배전반 시장 진입"
+     ],
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "조선·방산 수주 사이클 의존",
+      "공모가 산정 근거(비교기업·배수·할인율)가 아직 보도되지 않음",
+      "보도마다 상장 후 시가총액 표기 오류가 있어 증권신고서 원문 확인 필요"
+     ],
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "증권신고서상 비교기업과 적용 이익은?",
+      "미국 조선 공급망 진입의 구체적 수주 계획은?",
+      "데이터센터 배전반 매출 비중은 얼마인가?"
+     ],
+     "src": "kt_el",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "조선 호황·방산 수출 확대로 선박 전력·추진 시스템 수요 증가",
+     "src": "kt_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "보도 미확인",
+     "src": "kt_el",
+     "basis": "news_reported"
+    }
+   ],
+   "sector": "조선·방산 전력제어"
+  },
+  {
+   "name": "데스틴파워",
+   "market": "KOSDAQ",
+   "sector": "전력변환장치",
+   "underwriters": "한국투자증권",
+   "facts": [
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 8000,
+      "high": 11000
+     },
+     "unit": "KRW",
+     "src": "newspim_destin"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2200000,
+     "unit": "주",
+     "src": "newspim_destin"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 17600000000,
+      "high": 24200000000
+     },
+     "unit": "KRW",
+     "src": "newspim_destin"
+    },
+    {
+     "key": "offer.use_of_proceeds_text",
+     "value": "대부분 익산 신공장 건설·생산/시험설비 → 미국 데이터센터향 연료전지 인버터 수요 대응",
+     "src": "ibtomato_destin",
+     "basis": "news_reported"
+    },
+    {
+     "key": "note.risk_loss",
+     "value": "2026년 상반기 영업적자 전환 보도",
+     "src": "ibtomato_destin",
+     "basis": "news_reported"
+    },
+    {
+     "key": "filing.registration",
+     "value": "2026-10-28 증권신고서 제출(보도 기준)",
+     "src": "newspim_destin",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.summary",
+     "value": "연료전지 발전용 인버터와 ESS용 전력변환장치(PCS)를 만드는 2012년 설립 전력변환 기업",
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "발전용 연료전지 인버터, ESS용 전력변환장치(PCS)"
+      },
+      {
+       "label": "누구에게",
+       "text": "연료전지 시스템 업체(두산퓨얼셀과 공동개발), 미국 AI 데이터센터 전력 수요"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "장비 판매 매출"
+      },
+      {
+       "label": "매출 구성",
+       "text": "최대 고객사(A사) 매출 비중 80.6%(2025)"
+      },
+      {
+       "label": "성장 전략",
+       "text": "익산 신공장·시험설비로 미국 데이터센터향 공급 확대"
+      }
+     ],
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2025": {
+       "revenue": 29900000000.0,
+       "op_income": 1700000000.0
+      }
+     },
+     "src": "ds_et",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "다른 보도는 매출 289억·영업이익 19억"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "revenue": 14800000000.0,
+      "op_income": -1400000000.0
+     },
+     "src": "ibtomato_destin",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.top_customer_share",
+     "value": 0.806,
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "note.risk_capital",
+     "value": "2025년 말 완전자본잠식 → 2026년 7월 CB·RCPS 전환으로 해소(가결산)",
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 22.84,
+      "peers": [
+       "코세스(34.78배)",
+       "HD현대에너지솔루션(14.26배)",
+       "지투파워(19.49배)"
+      ],
+      "earnings_basis": "forecast",
+      "earnings_label": "2028년 별도 추정 순이익 156억원(연 20% 할인한 현재가치 약 99억원 보도)",
+      "applied_earnings": 9900000000.0,
+      "value_total": 225400000000.0,
+      "per_share_value": 15378,
+      "discount_low": 0.2847,
+      "discount_high": 0.4798,
+      "notes": [
+       "2023년 이후 기술특례 상장사 평균 할인율 26.88~39.80% 대비 할인 폭이 큼",
+       "2025년 순이익 흑자는 상당 부분 금융상품 평가이익이라는 지적(서플) → 실적 기준 재계산 제외"
+      ]
+     },
+     "src": "ds_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 14560000,
+     "src": "ds_nt",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "보도된 공모 시가총액 1,165억원÷희망 하단 8,000원으로 역산"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "연료전지 인버터·ESS PCS 전문, 두산퓨얼셀과 공동개발 이력",
+      "미국 AI 데이터센터의 연료전지 발전 수요를 겨냥해 익산 신공장 증설",
+      "2027년 매출 800억원 이상 목표(회사 전망)"
+     ],
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "2026년 상반기 영업손실 14억 — 고마진 수소 전용 모델 공급 종료·판가 인하",
+      "최대 고객 매출 비중 80.6%",
+      "2025년 말 완전자본잠식(전환으로 해소) — 재무 체력 약함",
+      "공모가 근거가 2028년 추정 이익"
+     ],
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "미국 데이터센터향 수주가 계약으로 확정된 물량이 있는가?",
+      "최대 고객(A사) 이외 판로 확보 계획은?",
+      "2028년 순이익 156억 추정의 매출·마진 가정은?"
+     ],
+     "src": "ds_et",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "수소연료전지 발전과 ESS 시장 — 미국 데이터센터 전력 수요로 관심 확대",
+     "src": "ds_et",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "코세스, HD현대에너지솔루션, 지투파워(비교기업)",
+     "src": "ds_et",
+     "basis": "news_reported"
+    }
+   ]
+  },
+  {
+   "name": "하나에어로다이내믹스",
+   "facts": [],
+   "note": "11월 일정 목록에 이름만 확인, 날짜 정보 잘림 → 관찰 목록",
+   "src_for_discovery": "gongmonow"
+  },
+  {
+   "name": "에이엘로봇",
+   "facts": [],
+   "note": "수요예측 진행 기업으로 보도, 날짜 미확인 → 관찰 목록",
+   "src_for_discovery": "cbci"
+  },
+  {
+   "name": "유캐스트",
+   "status": "postponed",
+   "facts": [],
+   "note": "금감원 증권신고서 정정 요구로 청약 일정 연기 보도",
+   "src_for_discovery": "ebn"
+  },
+  {
+   "name": "영광",
+   "market": "KOSDAQ",
+   "sector": "조선·플랜트 기자재(엔진룸 모듈)",
+   "underwriters": "미확인",
+   "facts": [
+    {
+     "key": "profile.summary",
+     "value": "선박 기관실 엔진룸 모듈과 플랜트용 압력용기·스키드를 주문 제작하는 울산의 조선해양·플랜트 기자재 기업",
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "선박 엔진룸 모듈(통합 모듈화), 플랜트 압력용기·스키드"
+      },
+      {
+       "label": "누구에게",
+       "text": "조선소·플랜트 EPC 업체(수주 생산)"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "수주 후 제작·납품 매출 — 수주잔고가 선행지표(2023년 1,502억 → 2026년 상반기 2,021억)"
+      },
+      {
+       "label": "성장 전략",
+       "text": "생산거점 통합, 원전·SMR·수소 연료전지·데이터센터 등 에너지 분야 확장(비중은 아직 작음)"
+      }
+     ],
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.annual",
+     "value": {
+      "2023": {
+       "revenue": 118330000000.0,
+       "op_income": 3160000000.0
+      },
+      "2024": {
+       "revenue": 140320000000.0,
+       "op_income": 13940000000.0
+      },
+      "2025": {
+       "revenue": 113130000000.0,
+       "op_income": 12300000000.0
+      }
+     },
+     "src": "yg_gw",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "블로그 정리 수치 — 증권신고서 확인 필요"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "revenue": 59060000000.0,
+      "op_income": 5380000000.0
+     },
+     "src": "yg_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.price_band",
+     "value": {
+      "low": 14000,
+      "high": 17000
+     },
+     "src": "yg_np",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "offer.price_final",
+     "value": 17000,
+     "src": "yg_np",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "demand.competition_ratio",
+     "value": 1000.1,
+     "src": "yg_np",
+     "basis": "news_reported"
+    },
+    {
+     "key": "subscription.competition_ratio",
+     "value": 684.7,
+     "src": "yg_wy",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 38400000000.0,
+      "high": 38400000000.0
+     },
+     "src": "yg_wy",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "확정 공모금액 약 384억원"
+    },
+    {
+     "key": "offer.float_ratio",
+     "value": 0.3175,
+     "src": "yg_gw",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.listing",
+     "value": {
+      "start": "2026-11-02",
+      "end": "2026-11-02"
+     },
+     "src": "yg_np",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 9053000,
+     "src": "yg_wy",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "확정 시가총액 약 1,539억원÷확정 공모가 17,000원으로 역산"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "EV/EBITDA",
+      "multiple": 11.98,
+      "peers": [
+       "HD현대마린솔루션(약 23배) 등 5곳"
+      ],
+      "earnings_basis": "actual",
+      "earnings_label": "최근 12개월(LTM) EBITDA 156억원",
+      "applied_earnings": 15600000000.0,
+      "per_share_value": 21196,
+      "notes": [
+       "주당 평가가액·배수는 블로그 정리값(신뢰도 낮음)",
+       "HD현대마린솔루션(약 23배)을 빼면 평가액이 공모가 상단 아래로 내려간다는 분석(alphasquare)"
+      ]
+     },
+     "src": "yg_ts2",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "수주잔고 2,021억원(2026년 상반기)으로 2023년 대비 약 35% 증가",
+      "2025년 매출 감소에도 영업이익률 10.9%로 개선",
+      "기관 경쟁률 1,000.1 대 1, 일반 청약 증거금 3.29조원"
+     ],
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "조선·플랜트 업황 의존, 2025년 매출 전년 대비 감소",
+      "고배수 비교기업 1곳이 평균 배수를 끌어올림",
+      "상장 직후 유통 가능 물량 31.75%"
+     ],
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "수주잔고의 매출 전환 시점과 마진은?",
+      "에너지 신사업(SMR·데이터센터) 수주 실적이 있는가?",
+      "HD현대마린솔루션을 뺀 비교기업 평균 배수는 몇 배인가?"
+     ],
+     "src": "yg_ts",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "조선 호황 사이클과 플랜트 투자에 연동되는 기자재 시장",
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "HD현대마린솔루션 등 조선 기자재 상장사 5곳(비교기업)",
+     "src": "yg_ts",
+     "basis": "news_reported"
+    },
+    {
+     "key": "demand.above_top_ratio",
+     "value": 0.989,
+     "src": "yg_np",
+     "basis": "news_reported",
+     "note": "가격 미제시 포함"
+    },
+    {
+     "key": "subscription.deposit",
+     "value": 3290000000000.0,
+     "src": "yg_wy",
+     "basis": "news_reported",
+     "unit": "KRW"
+    }
+   ]
+  },
+  {
+   "name": "래블업",
+   "market": "KOSDAQ",
+   "sector": "AI 인프라 소프트웨어",
+   "underwriters": "미확인",
+   "facts": [
+    {
+     "key": "profile.summary",
+     "value": "AI 가속기(GPU)와 서버 인프라를 통합 운영·관리하는 소프트웨어 'Backend.AI'를 개발·공급하는 기업",
+     "src": "lb_vs",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.business_model",
+     "value": [
+      {
+       "label": "무엇을 만드나·파나",
+       "text": "Backend.AI — GPU 클러스터 운영·스케줄링 소프트웨어"
+      },
+      {
+       "label": "누구에게",
+       "text": "AI 인프라를 운영하는 기업·기관"
+      },
+      {
+       "label": "어떻게 돈을 버나",
+       "text": "소프트웨어 구독·라이선스(반복매출 비중 94.7%, 순매출유지율 131.9%)"
+      },
+      {
+       "label": "성장 전략",
+       "text": "연구개발 고도화, 해외 사업 확대"
+      }
+     ],
+     "src": "lb_vs",
+     "basis": "news_reported"
+    },
+    {
+     "key": "fin.quarter",
+     "value": {
+      "period": "2026년 상반기",
+      "revenue": 4800000000.0,
+      "op_income": 600000000.0
+     },
+     "src": "lb_vs",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.price_final",
+     "value": 19000,
+     "src": "lb_vs",
+     "basis": "news_reported",
+     "unit": "KRW",
+     "note": "희망 범위 하단 확정"
+    },
+    {
+     "key": "offer.shares_total",
+     "value": 2180000,
+     "src": "lb_vs",
+     "basis": "news_reported",
+     "unit": "주"
+    },
+    {
+     "key": "offer.proceeds_band",
+     "value": {
+      "low": 41400000000.0,
+      "high": 41400000000.0
+     },
+     "src": "lb_vs",
+     "basis": "news_reported",
+     "unit": "KRW"
+    },
+    {
+     "key": "demand.competition_ratio",
+     "value": 284.53,
+     "src": "lb_vs",
+     "basis": "news_reported"
+    },
+    {
+     "key": "sched.listing",
+     "value": {
+      "start": "2026-11-03",
+      "end": "2026-11-03"
+     },
+     "src": "lb_vs",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.shares_post_ipo",
+     "value": 14570000,
+     "src": "lb_vs",
+     "basis": "analyst_estimate",
+     "unit": "주",
+     "note": "예상 시가총액 2,768억원÷확정 공모가 19,000원으로 역산"
+    },
+    {
+     "key": "valuation.underwriter",
+     "value": {
+      "method": "PER",
+      "multiple": 33.6,
+      "peers": [],
+      "earnings_basis": "forecast",
+      "earnings_label": "2029년 추정 순이익을 현재가치로 할인(보도)",
+      "notes": [
+       "주당 평가가액·할인율은 보도에서 미확인",
+       "글로벌 AI 인프라 투자 우려와 증시 변동성으로 밴드 하단 확정(회사 설명)"
+      ]
+     },
+     "src": "ds_nt",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.thesis",
+     "value": [
+      "반복매출 비중 94.7%, 순매출유지율 131.9% — 구독형 SW의 질 좋은 매출 구조",
+      "2026년 상반기 매출 전년 대비 58.2% 증가, 영업이익 흑자(약 6억)",
+      "GPU 자원 효율화 수요는 AI 인프라 투자와 함께 확대"
+     ],
+     "src": "lb_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.risks",
+     "value": [
+      "공모가 근거가 2029년 추정 이익(PER 33.6배)",
+      "수요예측 284.53 대 1로 밴드 하단 확정 — 기관 수요가 상대적으로 약함",
+      "매출 규모가 아직 작음(상반기 48억)"
+     ],
+     "src": "lb_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "study.questions",
+     "value": [
+      "해외 매출 비중과 주요 고객 수는?",
+      "GPU 제조사·클라우드 사업자의 자체 운영 툴과의 경쟁 구도는?",
+      "2029년 추정 이익의 매출 성장 가정은?"
+     ],
+     "src": "lb_el",
+     "basis": "analyst_estimate"
+    },
+    {
+     "key": "profile.industry",
+     "value": "AI 데이터센터의 GPU 운영 효율화 소프트웨어 시장",
+     "src": "lb_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "profile.competitors",
+     "value": "클라우드·GPU 업체의 자체 운영 도구(보도 기준 비교기업 미확인)",
+     "src": "lb_el",
+     "basis": "news_reported"
+    },
+    {
+     "key": "offer.price_position",
+     "value": "low",
+     "src": "lb_vs",
+     "basis": "news_reported",
+     "note": "희망 범위 하단 확정(밴드 수치 미수집)"
+    }
+   ]
+  }
+ ],
+ "sources": {
+  "mt": {
+   "url": "https://www.mt.co.kr/stock/2026/09/09/2026090910063059853",
+   "title": "바로팜 증권신고서 제출…희망 공모가 1만6400원~2만200원",
+   "publisher": "머니투데이",
+   "as_of": "2026-09-09"
+  },
+  "fnnews_baro": {
+   "url": "https://www.fnnews.com/news/202610271408412032",
+   "title": "전국 약국 90% 확보 바로팜 IPO 도전 \"헬스케어 밸류체인 확대\"",
+   "publisher": "파이낸셜뉴스",
+   "as_of": "2026-10-27"
+  },
+  "hankooki_baro": {
+   "url": "https://www.hankooki.com/news/articleView.html?idxno=346915",
+   "title": "바로팜, 약국 플랫폼 넘어 뷰티·제약으로…IPO로 성장동력 확보",
+   "publisher": "한국아이닷컴",
+   "as_of": null
+  },
+  "bizwatch1023": {
+   "url": "https://news.bizwatch.co.kr/article/market/2026/10/23/0021",
+   "title": "[공모주달력]AI·반도체소부장·로봇주 줄줄이 수요예측",
+   "publisher": "비즈워치",
+   "as_of": "2026-10-23"
+  },
+  "consumernews": {
+   "url": "https://www.consumernews.co.kr/news/articleView.html?idxno=766444",
+   "title": "[주간IPO] 10월 다섯째 주, 공모청약 없음…옵토닉스·동원파츠·넥스아이 등 수요예측",
+   "publisher": "소비자가만드는신문",
+   "as_of": null
+  },
+  "foxcg": {
+   "url": "https://foxcg.com/november-ipos-calendar",
+   "title": "11월 공모주 청약 일정｜바로팜·케이엠에프 등 8곳 캘린더",
+   "publisher": "foxcg.com(개인 캘린더 사이트)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "gongmonow": {
+   "url": "https://gongmonow.com/list",
+   "title": "2026년 공모주 상장 일정 및 청약 지표 리스트",
+   "publisher": "gongmonow.com(집계 사이트)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "newsway_dw": {
+   "url": "https://www.newsway.co.kr/news/view?ud=2026102714053922410",
+   "title": "동원파츠, 실적 성장 앞세워 IPO 출사표···거래처 확대는 숙제",
+   "publisher": "뉴스웨이",
+   "as_of": "2026-10-27"
+  },
+  "cbci": {
+   "url": "https://www.cbci.co.kr/news/articleView.html?idxno=618922",
+   "title": "[IPO 일정] 다음 주 IPO 시장, 옵토닉스 등 7개사 수요예측·엠비디 청약",
+   "publisher": "CBC뉴스",
+   "as_of": null
+  },
+  "dailyinvest": {
+   "url": "http://www.dailyinvest.kr/news/articleView.html?idxno=72283",
+   "title": "[주간 IPO 동향] 반도체 장비 '영광와이케이엠씨' 外 3곳",
+   "publisher": "데일리인베스트",
+   "as_of": null
+  },
+  "newstomato_kmf": {
+   "url": "https://www.newstomato.com/ReadNews.aspx?no=1315820",
+   "title": "[IB토마토](IPO인사이트)케이엠에프, 효소 넘어 신소재로…356억 공모",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "newspim_kte": {
+   "url": "https://www.newspim.com/news/view/20261029000306",
+   "title": "KTE, 증권신고서 제출",
+   "publisher": "뉴스핌",
+   "as_of": "2026-10-29"
+  },
+  "the_stock_kte": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33668",
+   "title": "케이티이, 증권신고서 제출…총 281만6000주 공모",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "newspim_destin": {
+   "url": "https://www.newspim.com/news/view/20261029000316",
+   "title": "데스틴파워, 증권신고서 제출",
+   "publisher": "뉴스핌",
+   "as_of": "2026-10-29"
+  },
+  "ibtomato_destin": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19972",
+   "title": "[IB토마토] (IPO인사이트)데스틴파워, 적자 속 증설…미국향 수요에 베팅",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "ebn": {
+   "url": "https://www.ebn.co.kr/news/articleView.html?idxno=1728188",
+   "title": "다음주 엘리스그룹 등 2개사 코스닥 상장…6개사 공모주 청약",
+   "publisher": "EBN",
+   "as_of": null
+  },
+  "therich": {
+   "url": "https://www.therich.io/ipo/57",
+   "title": "바로팜 공모 정보",
+   "publisher": "therich.io(집계 사이트)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "etfshopping_dw": {
+   "url": "https://etfshopping.com/ipo/%EB%8F%99%EC%9B%90%ED%8C%8C%EC%B8%A0",
+   "title": "동원파츠 공모주 수요예측 결과",
+   "publisher": "etfshopping.com(집계 사이트)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "nx_pim": {
+   "url": "https://www.newspim.com/news/view/20260928000976",
+   "title": "넥스아이, 증권신고서 제출",
+   "publisher": "뉴스핌",
+   "as_of": "2026-09-28"
+  },
+  "nx_ibt": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19668",
+   "title": "(IPO인사이트)넥스아이, 자본잠식 벗고 상장 도전…최대 650억 조달",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "nx_hk": {
+   "url": "https://www.hankooki.com/news/articleView.html?idxno=347154",
+   "title": "넥스아이 \"면역항암제 불응 타깃 공략…2030년 매출 1321억 목표\"",
+   "publisher": "한국아이닷컴",
+   "as_of": null
+  },
+  "nx_nw": {
+   "url": "https://newsway.co.kr/news/view?ud=2026102913541742637",
+   "title": "넥스아이, 코스닥 상장 발판 삼아 글로벌 기술이전 확대",
+   "publisher": "뉴스웨이",
+   "as_of": "2026-10-29"
+  },
+  "op_pim": {
+   "url": "https://www.newspim.com/news/view/20261026000784",
+   "title": "옵토닉스, 내달 코스닥 입성…\"FOG 수요 급증에 생산설비 확충\"",
+   "publisher": "뉴스핌",
+   "as_of": "2026-10-26"
+  },
+  "op_np": {
+   "url": "https://www.newsprime.co.kr/news/article/?no=749370",
+   "title": "옵토닉스, 코스닥 IPO 본격화…최대 264억원 공모",
+   "publisher": "프라임경제",
+   "as_of": null
+  },
+  "op_bl": {
+   "url": "https://www.bloter.net/news/articleView.html?idxno=674883",
+   "title": "[IPO 워치] 옵토닉스, 몸값 1000억 도전…25배 멀티플 통할까",
+   "publisher": "블로터",
+   "as_of": null
+  },
+  "op_gw": {
+   "url": "https://glasswallet.com/blog/ipo-2338-analysis/",
+   "title": "옵토닉스 공모주 분석(매출 89% 한화에어로스페이스)",
+   "publisher": "glasswallet(블로그)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "bp_et": {
+   "url": "https://www.etoday.co.kr/news/view/2582001",
+   "title": "약국 90% 품은 바로팜 IPO…정책·경쟁 변수 속 밸류 시험대",
+   "publisher": "이투데이",
+   "as_of": null
+  },
+  "bp_pn": {
+   "url": "https://www.pharmnews.com/news/articleView.html?idxno=307332",
+   "title": "3년 만에 흑자 전환 바로팜 \"헬스케어 AX 기업으로 도약\"",
+   "publisher": "팜뉴스",
+   "as_of": null
+  },
+  "dw_ms": {
+   "url": "https://www.metroseoul.co.kr/article/20261027500337",
+   "title": "[IPO 간담회] 동원파츠 \"9월까지 매출 1000억…수주잔고 내년분까지 찼다\"",
+   "publisher": "메트로서울",
+   "as_of": "2026-10-27"
+  },
+  "dw_nt": {
+   "url": "https://www.newstomato.com/ReadNews.aspx?no=1318352",
+   "title": "(IPO인사이트)동원파츠, 최대 538억 공모…공장 늘리고 빚 줄인다",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "dw_ibt": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19154",
+   "title": "동원파츠, IPO 승부수…영업익 7배 성장의 이면은 고객 편중",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "gn_ad": {
+   "url": "https://www.autodaily.co.kr/news/articleView.html?idxno=600645",
+   "title": "제논, 코스닥 상장예심 통과⋯상반기 매출 4.3배·영업익 22억원",
+   "publisher": "엠투데이",
+   "as_of": null
+  },
+  "gn_fc": {
+   "url": "https://www.newsfc.co.kr/news/articleView.html?idxno=82048",
+   "title": "제논, 고수익 GenOS 매출 비중 35.1%까지 상승",
+   "publisher": "금융소비자뉴스",
+   "as_of": null
+  },
+  "gn_pp": {
+   "url": "https://www.pinpointnews.co.kr/news/articleView.html?idxno=493916",
+   "title": "제논, 코스닥 상장 추진...최대 268억원 공모",
+   "publisher": "핀포인트뉴스",
+   "as_of": null
+  },
+  "yk_ns": {
+   "url": "https://www.newsis.com/view/NISX20261012_0003821550",
+   "title": "영광와이케이엠씨, 코스닥 상장 증권신고서 제출",
+   "publisher": "뉴시스",
+   "as_of": "2026-10-12"
+  },
+  "yk_nt": {
+   "url": "https://www.newstomato.com/readnews.aspx?no=1316417",
+   "title": "(IPO인사이트)영광와이케이엠씨, 흑자 후 상장…150억 증설 승부수",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "km_bl": {
+   "url": "https://www.bloter.net/news/articleView.html?idxno=674045",
+   "title": "[IPO 워치] 케이엠에프, 코스닥 예심 승인…영업이익률 55% 눈길",
+   "publisher": "블로터",
+   "as_of": null
+  },
+  "km_et": {
+   "url": "https://www.etoday.co.kr/news/view/2591496",
+   "title": "AI·바이오 틈새 파고든 케이엠에프 IPO…식품소재도 고마진 통할까",
+   "publisher": "이투데이",
+   "as_of": null
+  },
+  "km_ts": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33562",
+   "title": "최대 매출처 의존도 75%…성장 양날의 검 되나",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "kt_el": {
+   "url": "https://www.thelec.kr/news/articleView.html?idxno=63503",
+   "title": "방산 전력제어 국산화 케이티이, 연내 코스닥 상장 추진",
+   "publisher": "디일렉",
+   "as_of": null
+  },
+  "kt_np": {
+   "url": "https://www.newsprime.co.kr/news/article/?no=752824",
+   "title": "조선·방산 전력제어 강자 케이티이, 코스닥 상장 도전…최대 648억원 공모",
+   "publisher": "프라임경제",
+   "as_of": null
+  },
+  "ds_et": {
+   "url": "https://www.etoday.co.kr/news/view/2615981",
+   "title": "데스틴파워, 자본잠식 해소…IPO서 본업 수익성 검증",
+   "publisher": "이투데이",
+   "as_of": null
+  },
+  "db_ibt": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19568",
+   "title": "(IPO인사이트)다비오, 매출 3년 새 2.7배…적자 탈출은 과제",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "db_gw": {
+   "url": "https://glasswallet.com/blog/ipo-2344-analysis/",
+   "title": "다비오 공모주, 공모가 12,300–16,600원은 2028년 순이익 75억원 전제?",
+   "publisher": "glasswallet(블로그)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "bp_dp": {
+   "url": "https://dailypharm.com/user/news/343058",
+   "title": "코스닥 상장 시동 건 바로팜, 비교기업 2곳→4곳으로 확대",
+   "publisher": "데일리팜",
+   "as_of": null
+  },
+  "bp_ts": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33417",
+   "title": "미래 담고 거품 뺐다…가치 합리성 무게",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "bp_ds": {
+   "url": "https://dealsite.co.kr/articles/169073",
+   "title": "[IPO프리즘][바로팜] 해외 플랫폼으로 잡은 피어그룹…적정 밸류에이션 물음표",
+   "publisher": "딜사이트",
+   "as_of": null
+  },
+  "dw_ibt2": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19958",
+   "title": "(IPO인사이트)동원파츠, 최대 538억 공모…공장 늘리고 빚 줄인다",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "nx_gr": {
+   "url": "https://www.greened.kr/news/articleView.html?idxno=351216",
+   "title": "[공모주 SWOT] 넥스아이, 레거시 제약사 피어그룹 선정",
+   "publisher": "녹색경제신문",
+   "as_of": null
+  },
+  "gn_et": {
+   "url": "https://www.etoday.co.kr/news/view/2641219",
+   "title": "AI기업 IPO, 순이익 셈법 제각각…공모가 적정성 검증대",
+   "publisher": "이투데이",
+   "as_of": null
+  },
+  "gn_nt": {
+   "url": "https://www.newstopkorea.com/news/articleView.html?idxno=48598",
+   "title": "[상장 기대주 점검] 제논, 3000원에 들어온 FI…상장 첫날 191억 물량 대기",
+   "publisher": "뉴스톱",
+   "as_of": null
+  },
+  "yk_ibt": {
+   "url": "https://www.ibtomato.com/ExternalView.aspx?type=1&no=19777",
+   "title": "(IPO인사이트)영광와이케이엠씨, 흑자 후 상장…150억 증설 승부수",
+   "publisher": "IB토마토",
+   "as_of": null
+  },
+  "op_np2": {
+   "url": "https://www.newsprime.co.kr/news/article/?no=752990",
+   "title": "옵토닉스, 공모가 1만2000원 밴드 상단 확정…경쟁률 1202대 1",
+   "publisher": "프라임경제",
+   "as_of": null
+  },
+  "op_ds": {
+   "url": "https://dealsite.co.kr/articles/170096",
+   "title": "[옵토닉스 IPO] 상장 한달 뒤부터 36만주 물량 터진다…오버행 부담",
+   "publisher": "딜사이트",
+   "as_of": null
+  },
+  "op_nt2": {
+   "url": "https://www.newstomato.com/ReadNews.aspx?no=1315595",
+   "title": "(IPO인사이트)옵토닉스, 한화에어로 의존 89%…공모금도 증설에",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "db_nt2": {
+   "url": "https://www.newstomato.com/readnews.aspx?no=1313963",
+   "title": "(IPO인사이트)다비오, 매출 3년 새 2.7배…적자 탈출은 과제",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "km_ts2": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33570",
+   "title": "항비만 소재로 성장축 확대…사업화 성과 관건",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "ds_nt": {
+   "url": "https://www.newstomato.com/ReadNews.aspx?no=1318556",
+   "title": "(IPO인사이트)데스틴파워, 적자 속 증설…미국향 수요에 베팅",
+   "publisher": "뉴스토마토",
+   "as_of": null
+  },
+  "yg_np": {
+   "url": "https://www.newsprime.co.kr/news/article/?no=751877",
+   "title": "영광, 수요예측 경쟁률 1000대 1…공모가 1만7000원 밴드 상단",
+   "publisher": "프라임경제",
+   "as_of": null
+  },
+  "yg_wy": {
+   "url": "https://www.wolyo.co.kr/news/articleView.html?idxno=319533",
+   "title": "영광, 공모가 1만7000원 확정…청약 증거금 3.29조원 몰려",
+   "publisher": "월요신문",
+   "as_of": null
+  },
+  "yg_ts": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33428",
+   "title": "영광, 통합 모듈화 기술 무기로 코스닥 상장 본격화",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "yg_ts2": {
+   "url": "https://www.the-stock.kr/news/articleView.html?idxno=33451",
+   "title": "PER·PBR 대신 에비타 멀티플…회계 부담 반영",
+   "publisher": "더스탁",
+   "as_of": null
+  },
+  "yg_gw": {
+   "url": "https://glasswallet.com/blog/ipo-2333-analysis/",
+   "title": "영광 공모주, 상장 직후 풀리는 물량은 31.75%",
+   "publisher": "glasswallet(블로그)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "yg_as": {
+   "url": "https://alphasquare.co.kr/home/insight/posts/5883e7a2-aed6-4785-a205-12b8bb3e32dd",
+   "title": "영광 공모주 분석: 23배 비교기업 빼면 평가액은 상단 아래",
+   "publisher": "alphasquare(분석 글)",
+   "as_of": null,
+   "type": "aggregator_unofficial"
+  },
+  "lb_vs": {
+   "url": "https://www.venturesquare.net/1123545",
+   "title": "래블업, 11월 3일 코스닥 상장…공모가 1만9000원·예상 시총 2768억원",
+   "publisher": "벤처스퀘어",
+   "as_of": null
+  },
+  "lb_el": {
+   "url": "https://www.thelec.kr/news/articleView.html?idxno=64313",
+   "title": "래블업, 공모가 1만9000원 확정...414억원 조달",
+   "publisher": "디일렉",
+   "as_of": null
+  }
+ }
+}

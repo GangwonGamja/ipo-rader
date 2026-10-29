@@ -1,0 +1,11 @@
+.git
+.env
+**/__pycache__
+data/*.sqlite3*
+data/*.lock
+dashboard/index.html
+dashboard/branch.html
+dashboard/data.json
+dashboard/*.ics
+dashboard/*.csv
+tests

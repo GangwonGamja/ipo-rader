@@ -1,0 +1,7 @@
+{
+ "_설명": "지점용 브랜드 대시보드 설정. 파일을 지우면 일반(무브랜드) 대시보드만 생성됩니다.",
+ "house": "한국투자증권",
+ "branch": "건대역지점",
+ "logo": "dashboard/brand_logo.png",
+ "output": "dashboard/branch.html"
+}

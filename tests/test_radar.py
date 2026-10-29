@@ -1,0 +1,506 @@
+"""IPO Radar 검증 테스트 (python -m unittest -v).
+
+네트워크 없이 교체 가능한 전송 계층(fake transport)으로 주간 실행을 모의한다.
+IPOSTOCK HTML 픽스처는 '달력 칸 + [구분]기업명' 형태의 합성 예시이며, 실제 페이지 구조는
+접속이 허용된 환경에서 `python -m ipo_radar probe ipostock`으로 확인해야 한다.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import tempfile
+import unittest
+from datetime import date, datetime
+from pathlib import Path
+
+from ipo_radar import config, http, interest, registry, valuation
+from ipo_radar.__main__ import next_run, run_with_recovery
+from ipo_radar.collectors import ipostock
+from ipo_radar.db import connect
+
+KST = config.KST
+
+
+def cal_html(entries: dict[int, list[str]]) -> str:
+    """합성 달력: {일: ['[청약]바로팜', ...]}"""
+    tds = []
+    for d in range(1, 31):
+        items = "".join(f'<br><a href="/view.asp?code={abs(hash(e)) % 9999}">{e}</a>' for e in entries.get(d, []))
+        tds.append(f"<td><span>{d}</span>{items}</td>")
+    rows = "".join("<tr>" + "".join(tds[i:i + 7]) + "</tr>" for i in range(0, 30, 7))
+    return f"<html><body><table>{rows}</table></body></html>"
+
+
+class FakeNet:
+    """URL별 응답 지정. 함수면 호출 결과(status, body)를 사용."""
+
+    def __init__(self):
+        self.routes: dict[str, object] = {}
+        self.calls: list[str] = []
+        self.down: set[str] = set()
+
+    def __call__(self, url, headers):
+        self.calls.append(url)
+        for host in self.down:
+            if host in url:
+                raise OSError("network unreachable")
+        if url.endswith("/robots.txt"):
+            return 404, b""
+        for k, v in self.routes.items():
+            if k in url:
+                return (200, v.encode("utf-8")) if isinstance(v, str) else v
+        return 404, b""
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self._saved = (config.SEED_DIR, config.MANUAL_DIR)
+        config.SEED_DIR = self.tmp / "seed"
+        config.MANUAL_DIR = self.tmp / "manual"
+        config.SEED_DIR.mkdir()
+        config.MANUAL_DIR.mkdir()
+        self.db = self.tmp / "t.sqlite3"
+        self.net = FakeNet()
+        http.set_transport(self.net, sleep=lambda s: None)
+
+    def tearDown(self):
+        http.set_transport(None)
+        config.SEED_DIR, config.MANUAL_DIR = self._saved
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_at(self, iso, **kw):
+        from ipo_radar import pipeline
+        return pipeline.run(now=datetime.fromisoformat(iso), trigger="test", db_path=self.db, with_sample=False,
+                            export_dir=self.tmp / "out", **kw)
+
+
+class TestMonths(unittest.TestCase):
+    def test_current_month_plus_90_days(self):
+        self.assertEqual(ipostock.months_to_scan(date(2026, 10, 29)), [(2026, 10), (2026, 11), (2026, 12), (2027, 1)])
+        self.assertEqual(ipostock.months_to_scan(date(2026, 11, 2)), [(2026, 11), (2026, 12), (2027, 1)])
+        self.assertEqual(ipostock.months_to_scan(date(2026, 12, 31)), [(2026, 12), (2027, 1), (2027, 2), (2027, 3)])
+
+    def test_url_is_dynamic(self):
+        self.assertEqual(ipostock.month_url(2027, 1), "http://www.ipostock.co.kr/sub03/ipo04.asp?str1=2027&str2=1")
+
+
+class TestParser(unittest.TestCase):
+    def test_parse_and_merge(self):
+        html = cal_html({2: ["[청약]바로팜", "[수요]케이티이"], 3: ["[청약]바로팜", "[환불]넥스아이"],
+                         10: ["다비오(상장)"], 11: ["관련없는 공지"]})
+        rows = {(r["name"], r["event"]): r for r in ipostock.parse_calendar(html, 2026, 11)}
+        self.assertEqual(rows[("바로팜", "sched.subscription")]["start"], "2026-11-02")
+        self.assertEqual(rows[("바로팜", "sched.subscription")]["end"], "2026-11-03")
+        self.assertIn(("케이티이", "sched.demand_forecast"), rows)
+        self.assertIn(("넥스아이", "sched.refund"), rows)
+        self.assertIn(("다비오", "sched.listing"), rows)
+        self.assertEqual(len(rows), 4)
+
+    def test_cross_month_merge(self):
+        a = ipostock.parse_calendar(cal_html({30: ["[수요]A사"]}), 2026, 10)
+        b = ipostock.parse_calendar(cal_html({2: ["[수요]A사"]}), 2026, 11)
+        m = ipostock.merge_months(a + b)
+        self.assertEqual((m[0]["start"], m[0]["end"]), ("2026-10-30", "2026-11-02"))
+
+
+class TestIdentity(Base):
+    def test_alias_dedupe_and_kind(self):
+        conn = connect(self.db)
+        u1, c1 = registry.resolve_company(conn, "(주)바로팜", source_type="aggregator")
+        u2, c2 = registry.resolve_company(conn, "바로팜 주식회사", corp_code="01234567", source_type="official_disclosure")
+        u3, c3 = registry.resolve_company(conn, "Baropharm-unrelated", corp_code="01234567")
+        self.assertTrue(c1 and not c2 and not c3)
+        self.assertEqual(u1, u2)
+        self.assertEqual(u1, u3)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0], 1)
+        self.assertEqual(registry.classify_kind("미래에셋비전스팩7호"), "spac")
+        self.assertEqual(registry.classify_kind("한국리츠"), "reits")
+        self.assertEqual(registry.classify_kind("바로팜"), "general")
+
+    def test_lower_source_cannot_overwrite_official(self):
+        conn = connect(self.db)
+        from ipo_radar.db import upsert_source
+        off = upsert_source(conn, "https://dart/x", "official_disclosure")
+        web = upsert_source(conn, "https://news/x", "websearch_summary")
+        uid, _ = registry.resolve_company(conn, "A사")
+        self.assertEqual(registry.set_fact(conn, uid, "sched.subscription", {"start": "2026-11-02", "end": "2026-11-03"}, source_id=off), "new")
+        self.assertEqual(registry.set_fact(conn, uid, "sched.subscription", {"start": "2026-11-09", "end": "2026-11-10"}, source_id=web), "conflict")
+        self.assertEqual(registry.get_facts(conn, uid)["sched.subscription"]["value"]["start"], "2026-11-02")
+        registry.set_fact(conn, uid, "sched.subscription", {"start": "2026-11-09", "end": "2026-11-10"}, source_id=web)
+        n = conn.execute("SELECT COUNT(*) FROM changes WHERE change_type='source_conflict'").fetchone()[0]
+        self.assertEqual(n, 1, "같은 불일치는 한 번만 기록")
+
+
+class TestWeekly(Base):
+    """4주 모의 운영: 신규 → 재실행(중복 없음) → 일정 변경·이탈 → 수집 실패 → 복구."""
+
+    def set_ipostock(self, by_month: dict[tuple[int, int], dict]):
+        self.net.routes = {f"str1={y}&str2={m}": cal_html(e) for (y, m), e in by_month.items()}
+        self.net.routes.setdefault("ipo04.asp", cal_html({}))
+
+    def count(self, sql):
+        conn = connect(self.db)
+        try:
+            return conn.execute(sql).fetchone()[0]
+        finally:
+            conn.close()
+
+    def test_four_weeks(self):
+        # 1주차 (11/2 월 08:00)
+        self.set_ipostock({(2026, 11): {9: ["[청약]알파", "[수요]베타"], 10: ["[청약]알파"], 11: ["[수요]베타"], 18: ["[상장]알파"]}})
+        r1 = self.run_at("2026-11-02T08:00:00+09:00")
+        self.assertIn(r1["status"], ("success", "partial"))
+        self.assertEqual(r1["stages"]["ipostock"]["rows"], 3)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM companies"), 2)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM changes WHERE change_type='new'"), 2)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM changes WHERE change_type='schedule_change'"), 0)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM reports"), 2)
+        months_called = [u for u in self.net.calls if "ipo04.asp" in u]
+        self.assertEqual(len(months_called), 3, "11월~1월 3개 월 조회")
+
+        # 같은 주 재실행 → 아무것도 늘지 않음
+        before = {t: self.count(f"SELECT COUNT(*) FROM {t}") for t in ("companies", "changes", "reports", "briefings")}
+        self.run_at("2026-11-02T09:00:00+09:00")
+        after = {t: self.count(f"SELECT COUNT(*) FROM {t}") for t in before}
+        self.assertEqual(before, after)
+
+        # 2주차: 알파 청약 연기(9~10 → 16~17), 베타 사라짐, 감마 신규
+        self.set_ipostock({(2026, 11): {16: ["[청약]알파"], 17: ["[청약]알파"], 25: ["[상장]알파"], 20: ["[수요]감마"]}})
+        self.run_at("2026-11-09T08:00:00+09:00")
+        conn = connect(self.db)
+        sc = conn.execute("""SELECT c.field, c.before, c.after FROM changes c JOIN companies co USING(uid)
+                             WHERE co.name='알파' AND change_type='schedule_change' ORDER BY id""").fetchall()
+        self.assertEqual([x["field"] for x in sc], ["sched.subscription", "sched.listing"])
+        self.assertEqual(json.loads(sc[0]["before"])["start"], "2026-11-09")
+        self.assertEqual(json.loads(sc[0]["after"])["start"], "2026-11-16")
+        self.assertEqual(self.count("SELECT COUNT(*) FROM changes c JOIN companies co USING(uid) WHERE co.name='베타' AND change_type='postponed'"), 1)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM changes c JOIN companies co USING(uid) WHERE co.name='감마' AND change_type='new'"), 1)
+        self.assertEqual(self.count("SELECT MAX(version) FROM reports r JOIN companies co USING(uid) WHERE co.name='알파'"), 2)
+        rep = json.loads(conn.execute("SELECT diff FROM reports r JOIN companies co USING(uid) WHERE co.name='알파' AND version=2").fetchone()[0])
+        self.assertTrue(any("sched.subscription" in d["field"] for d in rep), "보고서에 지난 버전 대비 변경 기록")
+        ok_time = conn.execute("SELECT last_success FROM source_status WHERE source='ipostock'").fetchone()[0]
+
+        # 3주차: IPOSTOCK 다운 → 재시도 후 실패, 기존 데이터 유지, 상태 기록
+        self.net.down = {"ipostock.co.kr"}
+        n_before = self.count("SELECT COUNT(*) FROM facts")
+        r3 = self.run_at("2026-11-16T08:00:00+09:00")
+        self.assertEqual(r3["status"], "partial")
+        self.assertTrue(r3["stages"]["ipostock"]["degraded"])
+        conn = connect(self.db)
+        st = conn.execute("SELECT * FROM source_status WHERE source='ipostock'").fetchone()
+        self.assertEqual(st["status"], "error")
+        self.assertEqual(st["last_success"], ok_time, "마지막 성공 시각 보존")
+        self.assertEqual(st["consecutive_failures"], 1)
+        self.assertEqual(self.count("SELECT COUNT(*) FROM facts"), n_before, "실패해도 기존 데이터 유지")
+        self.assertEqual(self.count("SELECT COUNT(*) FROM changes WHERE change_type='postponed' AND detected_at>='2026-11-16'"), 0,
+                         "수집 실패를 '목록 이탈'로 오인하지 않음")
+
+        # 4주차: 복구
+        self.net.down = set()
+        self.run_at("2026-11-23T08:00:00+09:00")
+        st = connect(self.db).execute("SELECT * FROM source_status WHERE source='ipostock'").fetchone()
+        self.assertEqual((st["status"], st["consecutive_failures"]), ("ok", 0))
+        self.assertEqual(self.count("SELECT COUNT(*) FROM briefings"), 4, "주차별 브리핑 1건씩")
+
+    def test_retry_with_backoff(self):
+        calls = {"n": 0}
+
+        def flaky(url, headers):
+            if url.endswith("robots.txt"):
+                return 404, b""
+            calls["n"] += 1
+            return (503, b"") if calls["n"] < 3 else (200, "ok".encode())
+        waits = []
+        http.set_transport(flaky, sleep=waits.append)
+        self.assertEqual(http.fetch("https://x.example/a"), "ok")
+        self.assertEqual(waits, [config.RETRY_BACKOFF_SEC, config.RETRY_BACKOFF_SEC * 2])
+
+    def test_blocked_not_retried(self):
+        n = {"c": 0}
+
+        def deny(url, headers):
+            n["c"] += 1
+            return 403, b""
+        http.set_transport(deny, sleep=lambda s: None)
+        with self.assertRaises(http.FetchError) as e:
+            http.fetch("https://y.example/a", check_robots=False)
+        self.assertTrue(e.exception.blocked)
+        self.assertEqual(n["c"], 1)
+
+
+class TestInterest(Base):
+    def _mk(self, conn, name, n7, p7, pubs=3):
+        uid, _ = registry.resolve_company(conn, name)
+        items = []
+        for i in range(n7):
+            items.append({"channel": "news", "url": f"https://n{i % pubs}.example/{name}/{i}", "title": f"{name} 공모 청약 기사 {i} 고유문장{i * 7}",
+                          "snippet": f"고유 본문 {i} 내용 {i * 13} {name}", "published_at": "2026-11-01T09:00:00+09:00", "publisher": f"매체{i % pubs}"})
+        for i in range(p7):
+            items.append({"channel": "news", "url": f"https://n.example/{name}/p{i}", "title": f"{name} 상장 예정 기사 p{i} 문장{i * 11}",
+                          "snippet": f"이전 본문 {i} {i * 17}", "published_at": "2026-10-24T09:00:00+09:00", "publisher": "매체0"})
+        interest.process_mentions(conn, uid, name, items, None)
+        return uid
+
+    def test_missing_channels_not_zero(self):
+        conn = connect(self.db)
+        uid = self._mk(conn, "알파", 5, 1)
+        now = datetime(2026, 11, 2, 8, tzinfo=KST)
+        st = interest.window_stats(conn, uid, now, set(), name="알파")
+        res = interest.score_group({uid: st})[uid]
+        self.assertIsNone(res["score"])
+        self.assertEqual(res["reliability"], "산출 불가")
+
+    def test_small_sample_shrinkage_and_peer_norm(self):
+        conn = connect(self.db)
+        a = self._mk(conn, "알파", 3, 0)      # 0 → 3 (소표본 급증)
+        b = self._mk(conn, "베타", 60, 20)    # 20 → 60
+        now = datetime(2026, 11, 2, 8, tzinfo=KST)
+        g = {u: interest.window_stats(conn, u, now, {"news"}, name=n) for u, n in ((a, "알파"), (b, "베타"))}
+        res = interest.score_group(g)
+        # 원시 증가율은 알파가 무한대지만 보정 후 베타보다 낮아야 한다
+        self.assertLess(res[a]["components"]["growth"], res[b]["components"]["growth"])
+        self.assertTrue(res[a]["small_sample"])
+        self.assertIsNone(res[a]["components"]["engagement"], "참여도 데이터 없음 → 산출 불가")
+        self.assertAlmostEqual(res[a]["weight_coverage"], 0.85)
+        self.assertGreater(res[b]["score"], res[a]["score"])
+
+    def test_relevance_and_dupes(self):
+        conn = connect(self.db)
+        uid, _ = registry.resolve_company(conn, "제논")
+        items = [
+            {"channel": "news", "url": "https://a.example/1", "title": "제논 수요예측 흥행", "snippet": "제논 공모 기관 경쟁률", "publisher": "A", "published_at": "2026-11-01"},
+            {"channel": "news", "url": "https://b.example/1?utm_source=x", "title": "제논 수요예측 흥행", "snippet": "제논 공모 기관 경쟁률", "publisher": "B", "published_at": "2026-11-01"},
+            {"channel": "news", "url": "https://c.example/1", "title": "제논 가스 가격 급등", "snippet": "반도체용 제논 가스", "publisher": "C", "published_at": "2026-11-01"},
+            {"channel": "blog", "url": "https://d.example/1", "title": "제논 공모주 무료 리딩방", "snippet": "제논 청약 리딩방 오픈채팅", "publisher": "D", "published_at": "2026-11-01"},
+        ]
+        interest.process_mentions(conn, uid, "제논", items, ["제논 가스"])
+        rows = {r["url"]: dict(r) for r in conn.execute("SELECT * FROM mentions")}
+        self.assertEqual(rows["https://b.example/1?utm_source=x"]["is_duplicate"], 1)
+        self.assertEqual(rows["https://c.example/1"]["relevant"], 0)
+        self.assertEqual(rows["https://d.example/1"]["is_promo"], 1)
+        interest.process_mentions(conn, uid, "제논", items, ["제논 가스"])
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM mentions").fetchone()[0], 4, "재수집해도 중복 저장 없음")
+
+
+def F(**kw):
+    return {k.replace("__", "."): {"value": v} for k, v in kw.items()}
+
+
+B = 1e8
+PEERS = [{"name": f"P{i}", "origin": "analyst", "period": "2025", "fin_basis": "연결", "mktcap": m * B, "net_debt": 0,
+          "revenue": 1000 * B, "ebitda": 100 * B, "net_income": n * B} for i, (m, n) in enumerate([(1000, 100), (1200, 100), (1500, 100), (900, -20)])]
+
+
+class TestValuation(unittest.TestCase):
+    base = dict(fin__basis="연결", offer__shares_post_ipo=10_000_000, offer__shares_new=2_000_000,
+                offer__price_band={"low": 9000, "high": 11000}, valuation__peers=PEERS)
+
+    def test_hold_when_missing(self):
+        v = valuation.evaluate(F(offer__price_band={"low": 1, "high": 2}))
+        self.assertEqual(v["verdict"], "판단 유보")
+        self.assertTrue(any("재무" in r for r in v["reasons"]))
+
+    def test_no_per_for_loss_and_ev_uses_proceeds(self):
+        f = F(**self.base, fin__annual={"2025": {"revenue": 500 * B, "net_income": -10 * B, "ebitda": -5 * B,
+                                                  "cash": 50 * B, "debt": 30 * B, "equity": 100 * B}})
+        v = valuation.evaluate(f, "바이오")
+        self.assertFalse(v["methods"]["PER"]["used"])
+        self.assertIn("PER 미적용", v["methods"]["PER"]["why"])
+        self.assertTrue(v["methods"]["EV/Sales"]["used"])
+        # 공모 후 순차입금 = 30억 − (50억 + 200만주 × 10,000원)
+        self.assertAlmostEqual(v["net_debt_post"], 30 * B - (50 * B + 2_000_000 * 10_000))
+        # 음수 PER 비교기업 P3는 PER에서 제외되어야 함(여기선 PER 미사용이지만 EV/Sales엔 포함)
+        self.assertEqual(len(v["methods"]["EV/Sales"]["peers"]), 4)
+
+    def test_negative_peer_excluded_and_min_peers(self):
+        f = F(**self.base, fin__annual={"2025": {"revenue": 500 * B, "net_income": 50 * B, "ebitda": 80 * B,
+                                                  "cash": 50 * B, "debt": 30 * B, "equity": 100 * B}})
+        v = valuation.evaluate(f)
+        per = v["methods"]["PER"]
+        self.assertTrue(per["used"])
+        self.assertEqual({p["name"] for p in per["peers"]}, {"P0", "P1", "P2"})
+        self.assertTrue(any(e["peer"] == "P3" and e["method"] == "PER" for e in v["excluded_peers"]))
+        f2 = F(**{**self.base, "valuation__peers": PEERS[:2]}, fin__annual=f["fin.annual"]["value"])
+        self.assertEqual(valuation.evaluate(f2)["verdict"], "판단 유보")
+
+    def test_verdict_rules(self):
+        fa = {"2025": {"revenue": 500 * B, "net_income": 50 * B, "ebitda": 80 * B, "cash": 50 * B, "debt": 30 * B, "equity": 100 * B}}
+        cheap = valuation.evaluate(F(**{**self.base, "offer__price_band": {"low": 1000, "high": 1000}}, fin__annual=fa))
+        dear = valuation.evaluate(F(**{**self.base, "offer__price_band": {"low": 900000, "high": 900000}}, fin__annual=fa))
+        self.assertEqual(cheap["verdict"], "상대적 저평가 가능성")
+        self.assertEqual(dear["verdict"], "상대적 고평가 가능성")
+
+    def test_period_and_basis_mismatch_excluded(self):
+        peers = [dict(p, period="2024") for p in PEERS[:3]] + [dict(PEERS[0], name="X", fin_basis="별도")]
+        f = F(**{**self.base, "valuation__peers": peers}, fin__annual={"2025": {"revenue": 1, "net_income": 1, "ebitda": 1, "cash": 0, "debt": 0}})
+        v = valuation.evaluate(f)
+        self.assertEqual(v["verdict"], "판단 유보")
+        whys = " ".join(e["why"] for e in v["excluded_peers"])
+        self.assertIn("재무기간 불일치", whys)
+        self.assertIn("연결/별도 불일치", whys)
+
+
+class TestUnderwriterCheck(unittest.TestCase):
+    def test_actual_basis_verdicts(self):
+        base = {"method": "PER", "multiple": 22.91, "earnings_basis": "actual", "per_share_value": 32783}
+        cases = [(20000, "상대적 저평가 가능성"), (25000, "적정 범위"), (30000, "상대적 고평가 가능성")]
+        for price, want in cases:
+            v = valuation.underwriter_check(F(valuation__underwriter=base, offer__price_final=price))
+            self.assertEqual(v["verdict"], want, price)
+        v = valuation.underwriter_check(F(valuation__underwriter=base, offer__price_band={"low": 23000, "high": 26500}))
+        self.assertAlmostEqual(v["eff_discount"], 1 - 24750 / 32783)
+        self.assertAlmostEqual(v["fair_range"]["low"], 32783 * 0.70)
+        self.assertEqual(v["forecast_dependency"], 0.0)
+
+    def test_forecast_basis_is_held_with_achievement_ratio(self):
+        u = {"method": "PER", "multiple": 19.15, "earnings_basis": "forecast", "per_share_value": 17760}
+        v = valuation.underwriter_check(F(valuation__underwriter=u, offer__price_band={"low": 10500, "high": 13000}))
+        self.assertEqual(v["verdict"], "판단 유보")
+        self.assertEqual(v["forecast_dependency"], 1.0)
+        self.assertAlmostEqual(v["by_price_u"][0]["required_achievement"], 10500 / 17760)
+        self.assertIn("reference", v)
+
+    def test_adjusted_earnings_recomputed(self):
+        u = {"method": "PER", "multiple": 40.96, "earnings_basis": "adjusted", "value_total": 2045.73e8, "actual_value_total": 1206e8}
+        v = valuation.underwriter_check(F(valuation__underwriter=u, offer__shares_post_ipo=14_330_000,
+                                          offer__price_band={"low": 9700, "high": 12200}))
+        self.assertAlmostEqual(v["actual_value"], 1206e8 / 14_330_000)
+        self.assertEqual(v["verdict"], "상대적 고평가 가능성")
+        self.assertAlmostEqual(v["forecast_dependency"], 1 - 1206 / 2045.73)
+
+    def test_unknown_basis_is_provisional(self):
+        u = {"method": "PER", "multiple": 22.91, "earnings_basis": "unknown", "per_share_value": 15254}
+        v = valuation.underwriter_check(F(valuation__underwriter=u, offer__price_band={"low": 9400, "high": 11000}))
+        self.assertTrue(v["provisional"])
+        self.assertEqual(v["verdict"], "상대적 저평가 가능성")
+
+
+class TestDemand(unittest.TestCase):
+    def test_score_and_grade(self):
+        from ipo_radar import demand
+        v = demand.demand_view(F(demand__competition_ratio=1000.1, demand__above_top_ratio=0.989,
+                                 offer__price_band={"low": 14000, "high": 17000}, offer__price_final=17000))
+        self.assertEqual(v["grade"], "강함")
+        self.assertAlmostEqual(v["coverage"], 0.7)
+        self.assertEqual(demand.demand_view(F(offer__price_band={"low": 1, "high": 2}))["grade"], "발표 전")
+        weak = demand.demand_view(F(demand__competition_ratio=30, demand__lockup_commit_ratio=0.01, offer__price_position="low"))
+        self.assertEqual(weak["grade"], "약함")
+        self.assertTrue(any("하단" in f for f in weak["flags"]))
+
+    def test_aspects(self):
+        self.assertEqual(interest.aspects_of("공모가 고평가 논란, 의무보유확약 낮아 오버행 우려"),
+                         ["공모가·밸류", "수요예측·청약", "수급·물량"])
+
+    def test_post_json_uses_body(self):
+        seen = {}
+
+        def t(url, headers, data=None):
+            seen["data"] = data
+            seen["ct"] = headers.get("Content-Type")
+            return 200, b'{"ok": 1}'
+        http.set_transport(t, sleep=lambda s: None)
+        try:
+            self.assertEqual(http.post_json("https://api.example/x", {"a": 1}, check_robots=False), {"ok": 1})
+            self.assertEqual(seen["ct"], "application/json")
+            self.assertEqual(json.loads(seen["data"]), {"a": 1})
+        finally:
+            http.set_transport(None)
+
+
+class TestServer(unittest.TestCase):
+    def setUp(self):
+        import threading
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from ipo_radar import server
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "index.html").write_text("<p>dash</p>", encoding="utf-8")
+        (self.tmp / "data.json").write_text(json.dumps({"meta": {"generated_at": "2026-10-30T00:00:00+09:00"}}), encoding="utf-8")
+        spec = f"kim:{server.hash_password('admin-pass-123')}:admin;lee:{server.hash_password('viewer-pass-123')}:viewer"
+        self.app = server.build_app(out_dir=self.tmp, users_spec=spec, anon=False, with_sample=False, trust_proxy=False)
+        self.app["index"] = "index.html"
+        self.app["runner"].run_async = lambda trigger: True  # 실제 수집은 하지 않음
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(self.app))
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        self.urlreq = urllib.request
+
+    def tearDown(self):
+        self.srv.shutdown()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def req(self, path, user=None, pw=None, method="GET", headers=None):
+        import base64
+        import urllib.error
+        r = self.urlreq.Request(self.base + path, method=method, headers=headers or {}, data=b"" if method == "POST" else None)
+        if user:
+            r.add_header("Authorization", "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode())
+        opener = self.urlreq.build_opener(self.urlreq.ProxyHandler({}))
+        try:
+            with opener.open(r, timeout=5) as resp:
+                return resp.status, resp.read(), dict(resp.headers)
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(), dict(e.headers)
+
+    def test_auth_and_routes(self):
+        self.assertEqual(self.req("/healthz")[0], 200)
+        code, _, h = self.req("/")
+        self.assertEqual(code, 401)
+        self.assertIn("Basic", h.get("WWW-Authenticate", ""))
+        self.assertEqual(self.req("/", "lee", "wrong")[0], 401)
+        code, body, h = self.req("/", "lee", "viewer-pass-123")
+        self.assertEqual((code, body), (200, b"<p>dash</p>"))
+        self.assertEqual(h.get("X-Frame-Options"), "DENY")
+        for bad in ("/ipo_radar.sqlite3", "/../data/brand.json", "/template.html"):
+            self.assertEqual(self.req(bad, "lee", "viewer-pass-123")[0], 404, bad)
+        st = json.loads(self.req("/api/status", "lee", "viewer-pass-123")[1])
+        self.assertEqual((st["role"], st["generated_at"]), ("viewer", "2026-10-30T00:00:00+09:00"))
+
+    def test_refresh_requires_admin_and_header(self):
+        H = {"X-Requested-With": "ipo-radar"}
+        self.assertEqual(self.req("/admin/refresh", "lee", "viewer-pass-123", "POST", H)[0], 403)
+        self.assertEqual(self.req("/admin/refresh", "kim", "admin-pass-123", "POST")[0], 400)
+        self.assertEqual(self.req("/admin/refresh", "kim", "admin-pass-123", "POST", H)[0], 202)
+
+    def test_admin_from_env(self):
+        from ipo_radar import config, server
+        old = (config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS)
+        try:
+            config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS = "boss", "long-enough-pw", ""
+            app = server.build_app(out_dir=self.tmp, anon=False, with_sample=False, trust_proxy=False)
+            self.assertEqual(app["users"]["boss"]["role"], "admin")
+            self.assertTrue(server.verify_password("long-enough-pw", app["users"]["boss"]["hash"]))
+            config.SERVER_ADMIN_PASSWORD = "short"
+            with self.assertRaises(SystemExit):
+                server.build_app(out_dir=self.tmp, anon=False, with_sample=False, trust_proxy=False)
+        finally:
+            config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS = old
+
+    def test_lockout(self):
+        for _ in range(10):
+            self.req("/", "kim", "bad")
+        self.assertEqual(self.req("/", "kim", "admin-pass-123")[0], 429)
+
+
+class TestSchedule(unittest.TestCase):
+    def test_next_run_monday_8_kst(self):
+        self.assertEqual(next_run(datetime(2026, 10, 29, 21, tzinfo=KST)).isoformat(), "2026-11-02T08:00:00+09:00")
+        self.assertEqual(next_run(datetime(2026, 11, 2, 7, 59, tzinfo=KST)).isoformat(), "2026-11-02T08:00:00+09:00")
+        self.assertEqual(next_run(datetime(2026, 11, 2, 8, 0, tzinfo=KST)).isoformat(), "2026-11-09T08:00:00+09:00")
+        # UTC 일요일 23:00 = KST 월요일 08:00 (GitHub Actions cron '0 23 * * 0')
+        from datetime import timezone
+        utc = datetime(2026, 11, 1, 22, 59, tzinfo=timezone.utc)
+        self.assertEqual(next_run(utc).isoformat(), "2026-11-02T08:00:00+09:00")
+
+    def test_recovery_retries_failed_run(self):
+        seq = iter(["failed", "failed", "success"])
+        waits = []
+        res = run_with_recovery(run_fn=lambda **kw: {"status": next(seq), "run_id": kw["trigger"]}, sleep=waits.append, wait_sec=5)
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["run_id"], "schedule-retry2")
+        self.assertEqual(waits, [5, 5])
+
+
+if __name__ == "__main__":
+    unittest.main()

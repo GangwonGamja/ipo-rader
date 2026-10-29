@@ -1,0 +1,28 @@
+# 사용법: .env 작성 후  docker compose up -d
+#  - 인터넷 공개(도메인·HTTPS): caddy 포함 기본 구성
+#  - 사내망 전용: caddy 서비스를 지우고 app의 ports 주석을 해제해 내부 IP:8080으로 접속
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      IPO_RADAR_TRUST_PROXY: "1"
+    volumes:
+      - ipo-data:/var/lib/ipo-radar
+    # ports: ["8080:8080"]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  ipo-data:
+  caddy-data:
+  caddy-config:

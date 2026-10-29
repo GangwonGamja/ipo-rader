@@ -1,0 +1,7 @@
+[Unit]
+Description=IPO Radar — 매주 월요일 08:00 KST
+[Timer]
+OnCalendar=Mon *-*-* 08:00:00 Asia/Seoul
+Persistent=true
+[Install]
+WantedBy=timers.target
