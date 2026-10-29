@@ -600,6 +600,26 @@ class TestAI(unittest.TestCase):
         be2.generate("s", "t", ai.WEEKLY_SCHEMA)
         self.assertEqual(seen["model"], "claude-haiku-5-5")
 
+    def test_gemini_ignores_leftover_claude_model_name(self):
+        import os
+
+        from ipo_radar import ai
+        picked = {}
+        orig_model, orig_cls = ai.MODEL, ai.GeminiBackend
+        ai.MODEL = "claude-opus-5-5"
+        ai.GeminiBackend = lambda client, model: picked.setdefault("model", model)
+        old = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        try:
+            ai.make_client()
+            self.assertEqual(picked["model"], "auto")
+        finally:
+            ai.MODEL, ai.GeminiBackend = orig_model, orig_cls
+            if old is None:
+                os.environ.pop("GEMINI_API_KEY", None)
+            else:
+                os.environ["GEMINI_API_KEY"] = old
+
     def test_not_configured_without_key(self):
         import os
 

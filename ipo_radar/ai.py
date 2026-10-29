@@ -171,7 +171,8 @@ def make_client():
     if not key:
         raise NotConfigured("GEMINI_API_KEY 미설정")
     from google import genai
-    return GeminiBackend(genai.Client(api_key=key), MODEL)
+    model = "auto" if MODEL.startswith("claude") else MODEL  # Claude용 모델 이름이 남아 있으면 자동 선택
+    return GeminiBackend(genai.Client(api_key=key), model)
 
 
 def _call(backend, payload: dict, schema: dict, instruction: str) -> dict:
