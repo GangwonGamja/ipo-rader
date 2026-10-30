@@ -628,6 +628,23 @@ class TestServer(unittest.TestCase):
         self.assertTrue(json.loads(self.req("/api/macro", cookie=ack)[1])["status"]["ecos"]["key_set"])
         self.assertEqual(post("/admin/macro-key", json.dumps({"name": "ECOS_API_KEY", "key": "x y"}), ack)[0], 400)
 
+    def test_dockerfile_ships_every_tracked_dashboard_file(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        tracked = subprocess.run(["git", "ls-files", "dashboard"], cwd=root, capture_output=True, text=True).stdout.split()
+        docker = (root / "Dockerfile").read_text(encoding="utf-8")
+        missing = [f for f in tracked if f not in docker]
+        self.assertEqual(missing, [], "Dockerfile COPY에 빠진 화면 파일 → 배포 서버에서 502")
+
+    def test_handler_error_returns_500_not_dropped_connection(self):
+        _, _, ack = self.login("admin-code-1")
+        orig = self.server_mod.macro_page
+        self.server_mod.macro_page = lambda app, role: (_ for _ in ()).throw(FileNotFoundError("macro.html"))
+        self.addCleanup(setattr, self.server_mod, "macro_page", orig)
+        code, body, _ = self.req("/macro", cookie=ack)
+        self.assertEqual(code, 500)
+        self.assertIn("서버 오류", body.decode())
+
     def test_codes_from_env_and_validation(self):
         import os
         server = self.server_mod

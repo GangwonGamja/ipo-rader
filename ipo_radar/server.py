@@ -408,6 +408,24 @@ def make_handler(app):
             self.do_GET()
 
         def do_GET(self):
+            self._guard(self._get)
+
+        def do_POST(self):
+            self._guard(self._post)
+
+        def _guard(self, fn):
+            """처리 중 예외가 나도 연결을 끊지 않고 오류 화면을 돌려준다(끊으면 Render가 502를 보여 줌)."""
+            try:
+                fn()
+            except Exception as e:  # noqa: BLE001
+                log("요청 처리 오류 " + self.path.split("?")[0] + "\n" + traceback.format_exc())
+                try:
+                    msg = f"서버 오류가 났습니다: {type(e).__name__}. 잠시 후 다시 시도하세요. 계속되면 관리자에게 알려 주세요."
+                    self._send(500, msg.encode("utf-8"))
+                except Exception:  # noqa: BLE001 — 이미 응답을 보내기 시작한 경우
+                    pass
+
+        def _get(self):
             path = self.path.split("?")[0]
             if path == "/healthz":
                 return self._send(200, b"ok")
@@ -465,7 +483,7 @@ def make_handler(app):
                 return self._send(200, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             self._send(404, b"not found")
 
-        def do_POST(self):
+        def _post(self):
             path = self.path.split("?")[0]
             if path == "/login":
                 ip = self._ip()

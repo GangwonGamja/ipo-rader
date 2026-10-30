@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY ipo_radar ./ipo_radar
-COPY dashboard/template.html dashboard/brand_logo.png ./dashboard/
+COPY dashboard/template.html dashboard/macro.html dashboard/brand_logo.png ./dashboard/
 COPY data/seed ./data/seed
 COPY data/manual_inputs ./data/manual_inputs
 COPY data/brand.json ./data/brand.json
