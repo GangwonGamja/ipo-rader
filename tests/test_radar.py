@@ -341,6 +341,53 @@ class TestValuation(unittest.TestCase):
         self.assertIn("연결/별도 불일치", whys)
 
 
+class TestDart(Base):
+    def test_list_limits_period_and_skips_listed_companies(self):
+        from urllib.parse import parse_qs, urlparse
+
+        from ipo_radar.collectors import dart
+        seen = {}
+
+        def t(url, headers, data=None):
+            q = parse_qs(urlparse(url).query)
+            seen.update(bgn=q["bgn_de"][0], end=q["end_de"][0])
+            body = {"status": "000", "total_page": 1, "list": [
+                {"corp_name": "비상장A", "corp_code": "1", "corp_cls": "E", "report_nm": "증권신고서(지분증권)", "rcept_no": "1"},
+                {"corp_name": "코스닥B", "corp_code": "2", "corp_cls": "K", "report_nm": "증권신고서(지분증권)", "rcept_no": "2"},
+                {"corp_name": "코넥스C", "corp_code": "3", "corp_cls": "N", "report_nm": "[기재정정]증권신고서(지분증권)", "rcept_no": "3"},
+                {"corp_name": "비상장D", "corp_code": "4", "corp_cls": "E", "report_nm": "증권신고서(채무증권)", "rcept_no": "4"}]}
+            return 200, json.dumps(body).encode()
+        http.set_transport(t, sleep=lambda s: None)
+        old = config.DART_API_KEY
+        config.DART_API_KEY = "k"
+        try:
+            rows = dart.list_equity_filings(date(2026, 10, 30), lookback_days=120)
+        finally:
+            config.DART_API_KEY = old
+        self.assertEqual((seen["bgn"], seen["end"]), ("20260802", "20261030"))  # 89일
+        self.assertEqual([r["corp_name"] for r in rows], ["비상장A", "코넥스C"])
+        self.assertTrue(rows[1]["is_amendment"])
+
+    def test_equity_offering_reads_share_count(self):
+        from ipo_radar.collectors import dart
+        body = {"status": "000", "group": [
+            {"title": "일반사항", "list": [{"sbd": "2026년 11월 05일 ~ 2026년 11월 06일", "pymd": "2026년 11월 10일"}]},
+            {"title": "증권의종류", "list": [{"stksen": "기명식보통주", "stkcnt": "2,200,000", "slprc": "12,000"}]},
+            {"title": "인수인정보", "list": [{"actsen": "대표", "actnmn": "한국투자증권", "udtcnt": "2,200,000"}]},
+            {"title": "자금의사용목적", "list": [{"se": "시설자금", "amt": "14,180,000,000"}]}]}
+        http.set_transport(lambda u, h, d=None: (200, json.dumps(body).encode()), sleep=lambda s: None)
+        old = config.DART_API_KEY
+        config.DART_API_KEY = "k"
+        try:
+            f = dart.equity_offering("3", date(2026, 10, 30))
+        finally:
+            config.DART_API_KEY = old
+        self.assertEqual(f["offer.shares_total"], 2_200_000)
+        self.assertEqual(f["sched.subscription"], {"start": "2026-11-05", "end": "2026-11-06"})
+        self.assertEqual(f["offer.price_filing"], 12000)
+        self.assertEqual(f["_underwriters"], ["한국투자증권"])
+
+
 class TestUnderwriterCheck(unittest.TestCase):
     def test_actual_basis_verdicts(self):
         base = {"method": "PER", "multiple": 22.91, "earnings_basis": "actual", "per_share_value": 32783}

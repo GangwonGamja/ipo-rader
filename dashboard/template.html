@@ -665,8 +665,8 @@ function changesTab(){
 }
 
 const NEED = {ipostock:"네트워크 허용: www.ipostock.co.kr", dart:"DART_API_KEY (opendart.fss.or.kr 무료 발급)", dart_financials:"DART_API_KEY", naver_news:"NAVER_CLIENT_ID / SECRET (developers.naver.com)", naver_blog:"네이버 검색 API 키", naver_cafe:"네이버 검색 API 키",
-  google_news:"네트워크 허용: news.google.com", naver_stock_board:"상장 후 사용 가능", naver_datalab:"네이버 개발자센터 앱에 '데이터랩(검색어트렌드)' 추가 + NAVER 키", youtube:"YOUTUBE_API_KEY (Google Cloud에서 YouTube Data API v3 사용 설정)", ai_api:"GEMINI_API_KEY (aistudio.google.com에서 무료 발급)", krx:"KRX_AUTH_KEY (openapi.krx.co.kr)"};
-const SNAME = {ipostock:"IPOSTOCK 일정", dart:"DART 공시", dart_financials:"DART 재무", naver_news:"네이버 뉴스", naver_blog:"네이버 블로그", naver_cafe:"네이버 카페", google_news:"구글 뉴스", naver_stock_board:"네이버 종목토론방", naver_datalab:"네이버 데이터랩 검색 추이", youtube:"유튜브 영상 반응", krx:"KRX 시세", ai_api:"AI 요약 (Gemini)"};
+  naver_stock_board:"상장 후 사용 가능", naver_datalab:"네이버 개발자센터 앱에 '데이터랩(검색어트렌드)' 추가 + NAVER 키", youtube:"YOUTUBE_API_KEY (Google Cloud에서 YouTube Data API v3 사용 설정)", ai_api:"GEMINI_API_KEY (aistudio.google.com에서 무료 발급)", krx:"KRX_AUTH_KEY (openapi.krx.co.kr)"};
+const SNAME = {ipostock:"IPOSTOCK 일정", dart:"DART 공시", dart_financials:"DART 재무", naver_news:"네이버 뉴스", naver_blog:"네이버 블로그", naver_cafe:"네이버 카페", naver_stock_board:"네이버 종목토론방", naver_datalab:"네이버 데이터랩 검색 추이", youtube:"유튜브 영상 반응", krx:"KRX 시세", ai_api:"AI 요약 (Gemini)"};
 const SST = {ok:["정상","good"],error:["실패","bad"],blocked:["접근 차단","bad"],not_configured:["설정 필요","warn"],disabled:["비활성","hold"]};
 function sourcesTab(){
   const lr = DATA.meta.last_run; let stages = {};

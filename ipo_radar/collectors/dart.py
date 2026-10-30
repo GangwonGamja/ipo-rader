@@ -38,8 +38,15 @@ def _call(ep: str, **params):
     return data
 
 
-def list_equity_filings(today: date, lookback_days: int = 120) -> list[dict]:
-    """최근 증권신고서(지분증권)·정정·철회 공시 목록."""
+# 기업을 지정하지 않은 list 조회는 검색 기간이 최대 3개월(DART 오류 100) → 89일로 제한
+MAX_LOOKBACK_DAYS = 89
+# IPO 후보: 비상장(E)·코넥스(N, 이전상장 공모). 유가(Y)·코스닥(K) 상장사의 유상증자 신고서는 제외
+IPO_CORP_CLS = {"E", "N"}
+
+
+def list_equity_filings(today: date, lookback_days: int = MAX_LOOKBACK_DAYS) -> list[dict]:
+    """최근 증권신고서(지분증권)·정정·철회 공시 목록(상장사 유상증자 제외)."""
+    lookback_days = min(lookback_days, MAX_LOOKBACK_DAYS)
     out, page = [], 1
     bgn = (today - timedelta(days=lookback_days)).strftime("%Y%m%d")
     end = today.strftime("%Y%m%d")
@@ -48,6 +55,8 @@ def list_equity_filings(today: date, lookback_days: int = 120) -> list[dict]:
         for it in d.get("list", []):
             nm = it.get("report_nm", "")
             if "지분증권" not in nm and "철회" not in nm:
+                continue
+            if it.get("corp_cls") and it["corp_cls"] not in IPO_CORP_CLS:
                 continue
             it["is_amendment"] = bool(re.search(r"\[(기재)?정정\]|정정", nm))
             it["is_withdrawal"] = "철회" in nm
@@ -89,7 +98,8 @@ def equity_offering(corp_code: str, today: date) -> dict:
     if _range(general.get("pymd")):
         facts["sched.payment"] = _range(general.get("pymd"))
     kinds = groups.get("증권의종류") or []
-    total_shares = sum(_num(k.get("stksen")) or 0 for k in kinds) or None
+    # stkcnt = 증권수량(stksen은 '기명식보통주' 같은 증권의 종류명)
+    total_shares = sum(_num(k.get("stkcnt")) or 0 for k in kinds) or None
     if total_shares:
         facts["offer.shares_total"] = total_shares
     prices = [_num(k.get("slprc")) for k in kinds if _num(k.get("slprc"))]
@@ -105,7 +115,8 @@ def equity_offering(corp_code: str, today: date) -> dict:
         facts["offer.use_of_proceeds"] = [{"purpose": u.get("se"), "amount": _num(u.get("amt"))} for u in use]
     uw = groups.get("인수인정보") or []
     if uw:
-        facts["_underwriters"] = sorted({u.get("actnmn") for u in uw if u.get("actnmn")})
+        names = {u.get("actnmn") or u.get("actsen") for u in uw}
+        facts["_underwriters"] = sorted(n for n in names if n and not str(n).replace(",", "").isdigit())
     return facts
 
 

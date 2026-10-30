@@ -84,12 +84,7 @@ def collect_for(name: str) -> tuple[list[dict], dict]:
             status[f"naver_{ch}"] = f"not_configured: {e}"
         except Exception as e:
             status[f"naver_{ch}"] = f"error: {e}"
-    if not str(status.get("naver_news", "")).startswith("ok"):
-        try:
-            items += google_news(query)
-            status["google_news"] = "ok"
-        except Exception as e:
-            status["google_news"] = f"error: {e}"
+    # Google 뉴스 RSS는 robots.txt가 수집을 허용하지 않아 사용하지 않는다(접근 제한 우회 금지).
     status["naver_stock_board"] = "n/a: 상장 전 종목은 토론방 없음"
     from . import youtube
     from datetime import date

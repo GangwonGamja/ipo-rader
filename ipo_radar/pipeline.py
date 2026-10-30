@@ -197,7 +197,7 @@ def refresh_buzz(r: Run):
             agg.setdefault(k, []).append(v)
         interest.process_mentions(r.conn, c["uid"], c["name"], items, loads(c["exclude_terms"]), at=r.at)
         ok = set()
-        if status.get("naver_news") == "ok" or status.get("google_news") == "ok":
+        if status.get("naver_news") == "ok":
             ok.add("news")
         if status.get("naver_blog") == "ok":
             ok.add("blog")
