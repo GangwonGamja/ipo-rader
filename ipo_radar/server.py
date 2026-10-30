@@ -445,6 +445,16 @@ def make_handler(app):
                 return self._file(app["index"] if admin else view_name(app["index"]), "text/html; charset=utf-8")
             if path in ("/macro", "/macro/"):
                 return self._send(200, macro_page(app, role).encode("utf-8"), "text/html; charset=utf-8")
+            if path == "/api/macro/points":
+                from urllib.parse import parse_qs, urlparse
+                from . import macro
+                ids = [x for x in (parse_qs(urlparse(self.path).query).get("ids") or [""])[0].split(",") if x][:20]
+                conn = connect()
+                try:
+                    body = macro.points(conn, ids)
+                finally:
+                    conn.close()
+                return self._send(200, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             if path == "/api/macro":
                 from . import macro
                 conn = connect()

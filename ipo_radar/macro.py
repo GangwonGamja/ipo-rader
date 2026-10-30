@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS ai_usage (
 );
 """
 
-HISTORY_DAYS = int(os.environ.get("IPO_RADAR_MACRO_DAYS", "1100"))  # 약 3년
+HISTORY_DAYS = int(os.environ.get("IPO_RADAR_MACRO_DAYS", "3660"))  # 약 10년(그래프에서 연도별로 골라 봄)
 REFRESH_HOURS = float(os.environ.get("IPO_RADAR_MACRO_HOURS", "6"))
 
 # id: (그룹, 이름, 단위, 자료원, 원천 코드)
@@ -254,15 +254,20 @@ def collect(conn, today: date | None = None) -> dict:
         key = get_key(key_name) if key_name else ""
         ids = [sid for sid, s in SERIES.items() if s[3] == src]
         if key_name and not key:
-            _status(conn, src, "not_configured", f"{key_name} 미설정 — 매크로 화면(관리자) 'API 키'에서 넣으면 자동 수집합니다")
+            _status(conn, src, "not_configured", f"{key_name} 미등록 — 매크로 화면 'API 키·자료 관리' 탭(관리자 모드)에서 등록하면 자동 수집합니다")
             summary[src] = "not_configured"
             continue
         n, errs = 0, []
         for sid in ids:
             code = SERIES[sid][4]
             # 이미 있는 자료는 최근 45일만 다시 받는다(수정치 반영)
-            last = conn.execute("SELECT MAX(date) d FROM macro_points WHERE series=?", (sid,)).fetchone()["d"]
-            start = (date.fromisoformat(last) - timedelta(days=45)) if last else today - timedelta(days=HISTORY_DAYS)
+            rng = conn.execute("SELECT MIN(date) a, MAX(date) b FROM macro_points WHERE series=?", (sid,)).fetchone()
+            first, last = rng["a"], rng["b"]
+            full = today - timedelta(days=HISTORY_DAYS)
+            if not last or date.fromisoformat(first) > full + timedelta(days=60):
+                start = full  # 처음이거나 과거 자료가 모자라면 전체 기간을 받는다
+            else:
+                start = date.fromisoformat(last) - timedelta(days=45)
             try:
                 if src == "fred":
                     pts = fetch_fred(code, start, key)
@@ -525,23 +530,49 @@ def sentiment_index(series: dict[str, list[tuple[str, float]]], window: int = 25
     return {"available": True, "date": hist[-1][0], "value": v, "label": label, "components": last_parts, "history": hist}
 
 
-def _thin(pts: list[tuple[str, float]], limit: int = 800) -> list[tuple[str, float]]:
-    """화면 전송량을 줄이려 오래된 구간을 솎는다(최근 180개는 그대로)."""
-    if len(pts) <= limit:
-        return pts
-    head, tail = pts[:-180], pts[-180:]
-    step = max(1, len(head) // (limit - 180))
-    return head[::step] + tail
+_SENTI_CACHE: dict = {}
 
 
-def build(conn) -> dict:
-    ensure(conn)
+def _version(conn) -> tuple:
+    r = conn.execute("SELECT COUNT(*) n, MAX(fetched_at) f FROM macro_points").fetchone()
+    return (r["n"], r["f"])
+
+
+def _raw(conn) -> tuple[dict, dict]:
     rows = conn.execute("SELECT series, date, value, source FROM macro_points ORDER BY series, date").fetchall()
     raw: dict[str, list[tuple[str, float]]] = {}
     src: dict[str, str] = {}
     for r in rows:
         raw.setdefault(r["series"], []).append((r["date"], r["value"]))
         src[r["series"]] = r["source"]
+    return raw, src
+
+
+def _sentiment(conn, raw) -> dict:
+    """계산이 무거워 자료가 바뀔 때만 다시 계산한다."""
+    ver = _version(conn)
+    if _SENTI_CACHE.get("ver") != ver:
+        _SENTI_CACHE.update(ver=ver, val=sentiment_index(raw))
+    return _SENTI_CACHE["val"]
+
+
+def _change(pts, days):
+    if not pts:
+        return None
+    last_d = date.fromisoformat(pts[-1][0])
+    base = None
+    for d, v in pts:
+        if date.fromisoformat(d) <= last_d - timedelta(days=days):
+            base = (d, v)
+        else:
+            break
+    return {"from": base[0], "delta": round(pts[-1][1] - base[1], 6)} if base else None
+
+
+def build(conn) -> dict:
+    """화면 요약: 지표별 최근 값·변화·보유 연도(그래프 점은 points()로 따로 받는다)."""
+    ensure(conn)
+    raw, src = _raw(conn)
     series = {}
     for sid, pts in raw.items():
         if sid in SERIES:
@@ -550,10 +581,12 @@ def build(conn) -> dict:
             prefix = sid.split(".", 1)[0]
             g, name, unit, source, code = MANUAL_GROUPS.get(prefix, "custom"), sid.split(".", 1)[1], "", "manual", None
         series[sid] = {"id": sid, "group": g, "name": name, "unit": unit, "source": src.get(sid, source), "code": code,
-                       "last": pts[-1], "points": _thin(pts)}
+                       "last": pts[-1], "first": pts[0][0], "count": len(pts),
+                       "years": sorted({d[:4] for d, _ in pts}, reverse=True),
+                       "chg_1w": _change(pts, 7), "chg_1m": _change(pts, 30)}
     for sid, (g, name, unit, source, code) in SERIES.items():  # 아직 자료가 없는 지표도 빈 상태로 보여 준다
         series.setdefault(sid, {"id": sid, "group": g, "name": name, "unit": unit, "source": source, "code": code,
-                                "last": None, "points": []})
+                                "last": None, "first": None, "count": 0, "years": [], "chg_1w": None, "chg_1m": None})
     status = {r["source"]: dict(r) for r in conn.execute("SELECT * FROM macro_status").fetchall()}
     for s, meta in SOURCES.items():
         st = status.setdefault(s, {"source": s, "status": "never", "message": "아직 수집하지 않았습니다", "checked_at": None, "points": None})
@@ -562,10 +595,31 @@ def build(conn) -> dict:
     bonds = {k: bond_moves(raw.get(sid, []), yrs) for k, sid, yrs in
              (("us.2y", "us.2y", 2), ("us.10y", "us.10y", 10), ("us.30y", "us.30y", 30),
               ("kr.3y", "kr.3y", 3), ("kr.10y", "kr.10y", 10), ("kr.30y", "kr.30y", 30))}
-    senti = sentiment_index(raw)
+    senti = {k: v for k, v in _sentiment(conn, raw).items() if k != "history"}
     if senti.get("available"):
-        senti["history"] = _thin(senti["history"])
+        senti["years"] = sorted({d[:4] for d, _ in _SENTI_CACHE["val"]["history"]}, reverse=True)
     return {"generated_at": iso(), "series": series, "status": status, "bonds": bonds, "sentiment": senti,
-            "usage": usage_summary(conn), "manual_help": MANUAL_HELP, "keys": key_info(),
+            "usage": usage_summary(conn, 365), "manual_help": MANUAL_HELP, "keys": key_info(),
+            "history_days": HISTORY_DAYS,
             "refresh": {"running": STATE["running"], "last": STATE["last"], "last_error": STATE["last_error"],
                         "every_hours": REFRESH_HOURS}}
+
+
+SENTIMENT_ID = "_sentiment"
+
+
+def points(conn, ids: list[str]) -> dict:
+    """그래프용 전체 점. '_sentiment'는 자체 심리 지수 이력."""
+    ensure(conn)
+    out = {}
+    want = [i for i in ids if i != SENTIMENT_ID][:20]
+    if want:
+        q = ",".join("?" * len(want))
+        for r in conn.execute(f"SELECT series, date, value FROM macro_points WHERE series IN ({q}) ORDER BY series, date", want):
+            out.setdefault(r["series"], []).append((r["date"], r["value"]))
+        for i in want:
+            out.setdefault(i, [])
+    if SENTIMENT_ID in ids:
+        raw, _ = _raw(conn)
+        out[SENTIMENT_ID] = _sentiment(conn, raw).get("history") or []
+    return out

@@ -587,6 +587,9 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.req("/api/macro")[0], 401)
         js = json.loads(self.req("/api/macro", cookie=vck)[1])
         self.assertIn("us.10y", js["series"])
+        self.assertEqual(self.req("/api/macro/points?ids=us.10y")[0], 401)
+        self.assertEqual(json.loads(self.req("/api/macro/points?ids=us.10y,_sentiment", cookie=vck)[1]),
+                         {"us.10y": [], "_sentiment": []})
         self.assertTrue(all("message" not in st for st in js["status"].values()))  # 이용자에게 오류 상세 숨김
         self.assertTrue(self.macro_kicks)                       # 자료가 없으면 백그라운드 갱신 요청
         self.assertIn("message", json.loads(self.req("/api/macro", cookie=ack)[1])["status"]["fred"])
@@ -992,10 +995,23 @@ class TestMacro(unittest.TestCase):
         self.assertIn("VIX", st["fred"]["message"])
         self.assertNotIn("fredsecret123", json.dumps(st))      # 키가 화면용 메시지에 새지 않음
         self.assertTrue(any("ecossecret456" in u for u in seen))
-        # 두 번째 수집은 최근 45일만 다시 요청
+        # 과거 자료가 모자라면(10년 미만) 전체 기간을 다시 요청
+        start_full = (date(2026, 10, 30) - __import__("datetime").timedelta(days=macro.HISTORY_DAYS)).isoformat()
+        seen.clear()
+        macro.collect(self.conn, today=date(2026, 10, 30))
+        self.assertTrue(any(f"observation_start={start_full}" in u for u in seen if "DGS10" in u))
+        # 과거 자료가 충분하면 최근 45일만 다시 요청
+        self.conn.execute("INSERT INTO macro_points VALUES('us.10y',?,1.0,'fred','t')", (start_full,))
         seen.clear()
         macro.collect(self.conn, today=date(2026, 10, 30))
         self.assertTrue(any("observation_start=2026-09-14" in u for u in seen if "DGS10" in u))
+        # 요약에는 연도·변화, 점은 따로
+        summ = macro.build(self.conn)["series"]["us.10y"]
+        self.assertEqual(summ["years"][0], "2026")
+        self.assertIn(start_full[:4], summ["years"])
+        pts = macro.points(self.conn, ["us.10y", "_sentiment", "없는지표"])
+        self.assertEqual(pts["us.10y"][-1], ("2026-10-29", 4.15))
+        self.assertEqual((pts["_sentiment"], pts["없는지표"]), ([], []))
 
     def test_dashboard_key_overrides_env_and_is_masked(self):
         import os
@@ -1033,7 +1049,8 @@ class TestMacro(unittest.TestCase):
         self.assertEqual((res["fred"], res["ecos"]), ("not_configured", "not_configured"))
         self.assertEqual(res["altme"], "blocked")
         out = macro.build(self.conn)
-        self.assertEqual(out["series"]["us.10y"]["points"], [])
+        self.assertIsNone(out["series"]["us.10y"]["last"])
+        self.assertNotIn("points", out["series"]["us.10y"])   # 그래프 점은 /api/macro/points로 따로
         self.assertFalse(out["sentiment"]["available"])
 
     def test_manual_parse_rejects_bad_rows(self):
