@@ -497,8 +497,9 @@ class TestServer(unittest.TestCase):
         conn.close()
         return out
 
-    def login(self, code):
-        code_, _, h = self.req("/login", "POST", {"code": code})
+    def login(self, code, mode=None):
+        mode = mode or ("admin" if code.startswith("admin") else "viewer")
+        code_, _, h = self.req("/login", "POST", {"code": code, "mode": mode})
         ck = h.get("set-cookie", "")
         return code_, h.get("location"), ck.split(";")[0] if ck else None
 
@@ -509,13 +510,13 @@ class TestServer(unittest.TestCase):
         self.assertNotIn("www-authenticate", h)  # 브라우저 기본 로그인 팝업을 띄우지 않음
         code, body, _ = self.req("/login")
         self.assertEqual(code, 200)
-        self.assertIn("접속 코드", body.decode())
+        self.assertIn("이용자 코드", body.decode())
         self.assertEqual(self.req("/api/status")[0], 401)
 
     def test_codes_select_mode_and_viewer_gets_stripped_files(self):
         code, loc, ck = self.login("team-0915")
         self.assertEqual((code, loc), (303, "/"))
-        self.assertIn("HttpOnly", self.req("/login", "POST", {"code": "team-0915"})[2]["set-cookie"])
+        self.assertIn("HttpOnly", self.req("/login", "POST", {"code": "team-0915", "mode": "viewer"})[2]["set-cookie"])
         self.assertEqual(self.req("/", cookie=ck)[1], b"<p>viewer-dash</p>")
         self.assertNotIn(b"secret-err", self.req("/data.json", cookie=ck)[1])
         st = json.loads(self.req("/api/status", cookie=ck)[1])
@@ -528,7 +529,13 @@ class TestServer(unittest.TestCase):
 
     def test_wrong_code_tampered_and_expired_cookie(self):
         code, loc, ck = self.login("nope")
-        self.assertEqual((code, loc, ck), (303, "/login?e=1", None))
+        self.assertEqual((code, loc, ck), (303, "/login?mode=viewer&e=1", None))
+        # 모드가 맞지 않는 코드는 받지 않음
+        self.assertEqual(self.login("admin-code-1", mode="viewer")[1], "/login?mode=viewer&e=1")
+        self.assertEqual(self.login("team-0915", mode="admin")[1], "/login?mode=admin&e=1")
+        body = self.req("/login?mode=admin")[1].decode()
+        self.assertIn("관리자 모드로 입장", body)
+        self.assertIn('name="mode" value="admin"', body)
         _, _, vck = self.login("team-0915")
         name, val = vck.split("=", 1)
         payload, sig = val.split(".")
@@ -586,7 +593,7 @@ class TestServer(unittest.TestCase):
     def test_lockout(self):
         for _ in range(10):
             self.login("bad-code")
-        code, body, _ = self.req("/login", "POST", {"code": "admin-code-1"})
+        code, body, _ = self.req("/login", "POST", {"code": "admin-code-1", "mode": "admin"})
         self.assertEqual(code, 429)
 
 

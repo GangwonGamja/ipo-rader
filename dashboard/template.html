@@ -445,7 +445,6 @@ function todayTab(){
   ${S.week===0?aiWeekly():""}
   <section class="card"><div class="ch"><h2>${label} IPO 기업 <span class="muted small" style="font-weight:500">${wc.length}곳</span></h2><span class="muted small">일반기업 · 청약일 순</span></div>
     <div class="cb">${wc.length?`<div class="cos">${cards}</div>`:`<div class="empty"><b>이 주에는 일정이 있는 기업이 없습니다</b><span>다음 주로 넘겨 보거나 ‘청약 캘린더’에서 월간 일정을 확인하세요.</span></div>`}</div></section>
-  ${kpis()}
   <div class="grid2">
     <section class="card"><div class="ch"><h2>오늘 할 일</h2><span class="muted small">${md(today)} 기준</span></div><div class="cb"><div class="todo">${todoGroups()}</div></div></section>
     <div style="display:grid;gap:18px;align-content:start">${houseCard()}${changesMini()}</div>
@@ -1047,7 +1046,7 @@ function detail(uid){
 }
 
 function render(){
-  root.innerHTML = header() + `<main class="gut"><div class="in"><div id="banners" style="display:grid;gap:8px"></div><div id="tabbody" style="display:grid;gap:18px"></div>
+  root.innerHTML = header() + `<main class="gut"><div class="in"><div id="kpibar">${kpis()}</div><div id="banners" style="display:grid;gap:8px"></div><div id="tabbody" style="display:grid;gap:18px"></div>
     <div class="foot"><span>IPO Radar는 공개 자료를 정리한 상담 보조 도구입니다. 관심도는 화제성 지표로 주가 상승 확률이 아니고, 가치평가는 비교기업 기준 상대평가로 투자 권유가 아닙니다.</span>
     <span>데이터 생성 ${esc(DATA.meta.generated_at)} · 예시 데이터는 [예시]로 구분${BRAND?` · ${esc(BRAND.house)} ${esc(BRAND.branch)} 내부 상담용`:""}</span></div></div></main>`;
   renderTab(); renderDetail();

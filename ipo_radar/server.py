@@ -196,12 +196,14 @@ def read_token(app, token: str | None, now: float | None = None) -> str | None:
         return None
 
 
-def check_code(app, code: str) -> str | None:
-    """접속 코드 → 역할. 관리자 코드를 먼저 확인."""
+def check_code(app, code: str, mode: str | None = None) -> str | None:
+    """접속 코드 → 역할. mode(admin/viewer)를 주면 그 모드의 코드만 받는다."""
     code = (code or "").strip()
     if not code:
         return None
     for c in app["codes"]:
+        if mode and c["role"] != mode:
+            continue
         secret = c["secret"]
         ok = verify_password(code, secret) if secret.startswith("pbkdf2_sha256$") else \
             hmac.compare_digest(code.encode("utf-8"), secret.encode("utf-8"))
@@ -220,35 +222,48 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
 
-def login_page(app, error: str = "") -> str:
+def login_page(app, error: str = "", mode: str = "viewer") -> str:
     import html
+    admin = mode == "admin"
     b = app.get("brand") or {}
     logo = f"<img src='{b['logo_data']}' alt='' style='height:28px'>" if b.get("logo_data") else "<b style='font-size:20px;color:#692c00'>IPO Radar</b>"
     branch = html.escape(b.get("branch") or "공모주 상담 데스크")
     err = f"<p class='err'>{html.escape(error)}</p>" if error else ""
+    accent = "#231815" if admin else "#692c00"
+    title = "관리자 모드 접속" if admin else "공모주 상담 데스크 접속"
+    desc = ("관리자 코드를 입력하세요. 데이터 관리, 지금 갱신, 자료원 상태를 볼 수 있습니다." if admin
+            else "부서에서 받은 이용자 코드를 입력하세요.")
+    tab = lambda m, label: (f"<a href='/login?mode={m}' class='tab{' on' if mode == m else ''}' "  # noqa: E731
+                            f"aria-current='{'page' if mode == m else 'false'}'>{label}</a>")
     return f"""<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>IPO Radar 접속</title>
 <style>
-:root{{--ink:#231815;--sub:#8a7c72;--line:#e4ddd5;--brand:#692c00;--bg:#f6f4f1}}
+:root{{--ink:#231815;--sub:#8a7c72;--line:#e4ddd5;--brand:#692c00;--accent:{accent};--bg:#f6f4f1}}
 *{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
 font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;padding:16px}}
-.card{{width:min(380px,100%);background:#fff;border:1px solid var(--line);border-top:4px solid var(--brand);border-radius:6px;padding:28px 24px;display:grid;gap:16px}}
+.card{{width:min(400px,100%);background:#fff;border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:6px;padding:24px;display:grid;gap:16px}}
 .id{{display:flex;align-items:center;gap:12px;flex-wrap:wrap}}.id .br{{font-weight:800;font-size:18px}}
+.tabs{{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:4px;overflow:hidden}}
+.tab{{text-align:center;padding:10px;font-size:14px;font-weight:500;color:var(--sub);text-decoration:none;background:#faf8f6}}
+.tab.on{{background:var(--accent);color:#fff;font-weight:700}}
+.tab:focus-visible{{outline:2px solid #b8873f;outline-offset:-2px}}
 h1{{font-size:16px;margin:0}}p{{margin:0;font-size:13px;color:var(--sub);line-height:1.6}}
 label{{font-size:13px;font-weight:700;display:grid;gap:6px}}
 input{{font:inherit;font-size:16px;padding:10px 12px;border:1px solid #cfc4b8;border-radius:4px;letter-spacing:.1em}}
 input:focus{{outline:2px solid #b8873f;outline-offset:1px}}
-button{{font:inherit;font-weight:700;padding:11px;border:0;border-radius:4px;background:var(--brand);color:#fff;cursor:pointer}}
+button{{font:inherit;font-weight:700;padding:11px;border:0;border-radius:4px;background:var(--accent);color:#fff;cursor:pointer;width:100%}}
 .err{{color:#b3261e;font-weight:500}}
 </style>
 <div class="card">
   <div class="id">{logo}<span class="br">{branch}</span></div>
-  <h1>공모주 상담 데스크 접속</h1>
-  <p>부서에서 받은 접속 코드를 입력하세요. 관리자 코드를 입력하면 관리자 모드로 들어갑니다.</p>
+  <nav class="tabs" aria-label="접속 모드">{tab("viewer", "이용자")}{tab("admin", "관리자")}</nav>
+  <h1>{title}</h1>
+  <p>{desc}</p>
   {err}
   <form method="post" action="/login" autocomplete="off">
-    <label>접속 코드<input type="password" name="code" required autofocus inputmode="text"></label>
-    <div style="height:12px"></div><button type="submit" style="width:100%">입장</button>
+    <input type="hidden" name="mode" value="{'admin' if admin else 'viewer'}">
+    <label>{'관리자 코드' if admin else '이용자 코드'}<input type="password" name="code" required autofocus></label>
+    <div style="height:12px"></div><button type="submit">{'관리자 모드로 입장' if admin else '입장'}</button>
   </form>
 </div></html>"""
 
@@ -324,8 +339,9 @@ def make_handler(app):
             if path == "/healthz":
                 return self._send(200, b"ok")
             if path == "/login":
-                err = "코드가 맞지 않습니다. 다시 입력하세요." if "e=1" in self.path else ""
-                return self._send(200, login_page(app, err).encode("utf-8"), "text/html; charset=utf-8")
+                mode = "admin" if "mode=admin" in self.path else "viewer"
+                err = ("관리자 코드가 맞지 않습니다." if mode == "admin" else "이용자 코드가 맞지 않습니다.") if "e=1" in self.path else ""
+                return self._send(200, login_page(app, err, mode).encode("utf-8"), "text/html; charset=utf-8")
             if path == "/logout":
                 return self._redirect("/login", self._cookie("", 0))
             role = self._role()
@@ -364,10 +380,11 @@ def make_handler(app):
                 n = int(self.headers.get("Content-Length") or 0)
                 from urllib.parse import parse_qs
                 form = parse_qs(self.rfile.read(min(n, 4096)).decode("utf-8", "replace"))
-                role = check_code(app, (form.get("code") or [""])[0])
+                mode = "admin" if (form.get("mode") or ["viewer"])[0] == "admin" else "viewer"
+                role = check_code(app, (form.get("code") or [""])[0], mode)
                 if not role:
                     app["guard"].fail(ip)
-                    return self._redirect("/login?e=1")
+                    return self._redirect(f"/login?mode={mode}&e=1")
                 app["guard"].ok(ip)
                 log(f"{ip} {'관리자' if role == 'admin' else '이용자'} 모드 접속")
                 return self._redirect("/", self._cookie(make_token(app, role), SESSION_HOURS * 3600))
