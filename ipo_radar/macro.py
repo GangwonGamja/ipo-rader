@@ -78,12 +78,30 @@ SERIES = {
     "fx.usdkrw": ("fx", "원/달러 환율(매매기준율)", "원", "ecos", "731Y001/D/0000001"),
     # 심리 (alternative.me)
     "fng.crypto": ("sentiment", "암호화폐 공포·탐욕 지수", "0~100", "altme", "fng"),
+    # 국내 지수 (공공데이터포털, 공식·하루 늦게 반영)
+    "kr.kospi": ("kr_eq", "코스피", "pt", "datagokr", "코스피"),
+    "kr.kosdaq": ("kr_eq", "코스닥", "pt", "datagokr", "코스닥"),
+    # Yahoo Finance (비공식·선택): 선물·아시아·반도체·원자재
+    "y.es": ("global", "S&P 500 선물", "pt", "yahoo", "ES=F"),
+    "y.nq": ("global", "나스닥100 선물", "pt", "yahoo", "NQ=F"),
+    "y.sox": ("global", "필라델피아 반도체지수(SOX)", "pt", "yahoo", "^SOX"),
+    "y.nikkei": ("global", "닛케이 225", "pt", "yahoo", "^N225"),
+    "y.hsi": ("global", "항셍지수", "pt", "yahoo", "^HSI"),
+    "y.sse": ("global", "상하이종합", "pt", "yahoo", "000001.SS"),
+    "y.samsung": ("kr_eq", "삼성전자", "원", "yahoo", "005930.KS"),
+    "y.hynix": ("kr_eq", "SK하이닉스", "원", "yahoo", "000660.KS"),
+    "y.nvda": ("global", "엔비디아", "$", "yahoo", "NVDA"),
+    "y.gold": ("global", "금 선물", "$/oz", "yahoo", "GC=F"),
+    "y.btc": ("global", "비트코인", "$", "yahoo", "BTC-USD"),
+    "y.usdjpy": ("global", "달러/엔", "엔", "yahoo", "JPY=X"),
 }
 
 SOURCES = {
     "fred": {"name": "FRED (미국 세인트루이스 연준)", "key": "FRED_API_KEY", "url": "https://fred.stlouisfed.org"},
     "ecos": {"name": "한국은행 ECOS", "key": "ECOS_API_KEY", "url": "https://ecos.bok.or.kr"},
     "altme": {"name": "alternative.me 암호화폐 공포·탐욕 지수", "key": None, "url": "https://alternative.me/crypto/fear-and-greed-index/"},
+    "datagokr": {"name": "공공데이터포털 금융위원회 지수시세", "key": "DATA_GO_KR_KEY", "url": "https://www.data.go.kr/data/15094807/openapi.do"},
+    "yahoo": {"name": "Yahoo Finance (비공식·선택)", "key": None, "url": "https://finance.yahoo.com"},
     "manual": {"name": "관리자 입력", "key": None, "url": None},
 }
 
@@ -107,8 +125,8 @@ def ensure(conn):
 
 # ---------- API 키: 관리자 화면에서 입력 ----------
 
-KEY_NAMES = ("FRED_API_KEY", "ECOS_API_KEY")
-KEY_RE = re.compile(r"^[A-Za-z0-9]{8,100}$")
+KEY_NAMES = ("ECOS_API_KEY", "FRED_API_KEY", "DATA_GO_KR_KEY")
+KEY_RE = re.compile(r"^[A-Za-z0-9+/=%_-]{8,200}$")  # 공공데이터포털 키는 +/= 또는 %가 들어갈 수 있음
 
 
 def key_file():
@@ -151,7 +169,7 @@ def set_key(name: str, value: str | None, sync=None) -> dict:
     if value is not None:
         value = value.strip()
         if not KEY_RE.match(value):
-            return {"ok": False, "message": "키 형식이 맞지 않습니다(영문·숫자 8~100자, 공백 없이)."}
+            return {"ok": False, "message": "키 형식이 맞지 않습니다(영문·숫자 등 8~200자, 공백 없이)."}
     keys = _load_keys()
     if value is None:
         keys.pop(name, None)
@@ -163,7 +181,7 @@ def set_key(name: str, value: str | None, sync=None) -> dict:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(keys, fh)
     synced, sync_msg = sync(value) if sync else (None, "")
-    label = SOURCES["ecos" if name == "ECOS_API_KEY" else "fred"]["name"]
+    label = next(v["name"] for v in SOURCES.values() if v["key"] == name)
     msg = f"{label} 키를 저장했습니다. 바로 수집을 시작합니다." if value is not None else f"{label} 키를 지웠습니다."
     return {"ok": True, "message": msg, "render_synced": synced, "sync_message": sync_msg}
 
@@ -173,7 +191,8 @@ def _mask(msg: str) -> str:
     for name in KEY_NAMES:
         for v in (os.environ.get(name), (_load_keys().get(name) or {}).get("value")):
             if v:
-                msg = msg.replace(v, "****")
+                from urllib.parse import quote
+                msg = msg.replace(quote(v, safe=""), "****").replace(v, "****")
     return re.sub(r"(api_key=)[^&\s]+", r"\1****", msg)
 
 
@@ -234,6 +253,91 @@ def fetch_altme(days: int) -> list[tuple[str, float]]:
     return out
 
 
+def fetch_datagokr(name: str, start: date, end: date, key: str) -> list[tuple[str, float]]:
+    """공공데이터포털 금융위원회_지수시세정보(V2). 2020년 이후, 영업일 기준 하루 늦게 반영."""
+    from urllib.parse import quote
+    k = key if "%" in key else quote(key, safe="")  # 인코딩 키/디코딩 키 둘 다 받음
+    out, page = [], 1
+    while True:
+        url = ("https://apis.data.go.kr/1160100/GetMarketIndexInfoService_V2/getStockMarketIndex_V2"
+               f"?serviceKey={k}&resultType=json&numOfRows=1000&pageNo={page}"
+               f"&beginBasDt={start.strftime('%Y%m%d')}&endBasDt={(end + timedelta(days=1)).strftime('%Y%m%d')}&idxNm={quote(name)}")
+        js = http.fetch_json(url, check_robots=False)  # 공식 Open API
+        body = (js.get("response") or {}).get("body")
+        if body is None:
+            head = (js.get("response") or {}).get("header") or js
+            raise http.FetchError(f"공공데이터포털 응답 오류: {str(head)[:150]}")
+        items = (body.get("items") or {}).get("item") or []
+        if isinstance(items, dict):
+            items = [items]
+        for it in items:
+            d, v = str(it.get("basDt", "")), _num(it.get("clpr"))
+            if v is not None and len(d) == 8 and it.get("idxNm", name) == name:
+                out.append((f"{d[:4]}-{d[4:6]}-{d[6:]}", v))
+        total = int(_num(body.get("totalCount")) or 0)
+        if page * 1000 >= total or page >= 20:
+            return sorted(set(out))
+        page += 1
+
+
+def yahoo_enabled() -> bool:
+    if os.environ.get("IPO_RADAR_YAHOO") == "1":
+        return True
+    return (_load_keys().get("_yahoo") or {}).get("value") == "on"
+
+
+def set_yahoo(on: bool) -> dict:
+    import json
+    keys = _load_keys()
+    keys["_yahoo"] = {"value": "on" if on else "off", "updated_at": iso()}
+    f = key_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(f), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(keys, fh)
+    return {"ok": True, "message": "Yahoo Finance 수집을 켰습니다. 바로 수집을 시작합니다." if on else "Yahoo Finance 수집을 껐습니다."}
+
+
+def fetch_yahoo(symbol: str, start: date, today: date) -> list[tuple[str, float]]:
+    """Yahoo Finance 차트 응답(비공식). 브라우저인 척하지 않고 서비스 이름으로 요청한다."""
+    from urllib.parse import quote
+    p1 = int(datetime(start.year, start.month, start.day, tzinfo=config.KST).timestamp())
+    p2 = int(datetime(today.year, today.month, today.day, tzinfo=config.KST).timestamp()) + 2 * 86400
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}?period1={p1}&period2={p2}&interval=1d"
+    js = http.fetch_json(url, attempts=1)  # robots.txt 확인, 재시도 없이(차단·한도 시 바로 멈춤)
+    res = ((js.get("chart") or {}).get("result") or [None])[0]
+    if not res:
+        raise http.FetchError(f"Yahoo 응답 오류: {str((js.get('chart') or {}).get('error'))[:120]}")
+    off = int((res.get("meta") or {}).get("gmtoffset") or 0)
+    ts = res.get("timestamp") or []
+    closes = (((res.get("indicators") or {}).get("quote") or [{}])[0]).get("close") or []
+    out = {}
+    for t_, c in zip(ts, closes):
+        if c is None:
+            continue
+        d = datetime.utcfromtimestamp(int(t_) + off).date().isoformat()
+        out[d] = round(float(c), 6)
+    return sorted(out.items())
+
+
+def _collect_yahoo(conn, ids, today, now) -> tuple[int, list[str]]:
+    n, errs = 0, []
+    for k, sid in enumerate(ids):
+        rng = conn.execute("SELECT MIN(date) a, MAX(date) b FROM macro_points WHERE series=?", (sid,)).fetchone()
+        full = today - timedelta(days=HISTORY_DAYS)
+        start = full if (not rng["b"] or date.fromisoformat(rng["a"]) > full + timedelta(days=60)) else date.fromisoformat(rng["b"]) - timedelta(days=10)
+        try:
+            n += _upsert(conn, sid, fetch_yahoo(SERIES[sid][4], start, today), "yahoo", now)
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"{SERIES[sid][1]}: {type(e).__name__}: {e}")
+            if getattr(e, "blocked", False) or getattr(e, "status", None) == 429:
+                errs.append("차단·요청 한도로 나머지 종목은 이번에 건너뜀")
+                break
+        if k < len(ids) - 1:
+            http._sleep(1.0)  # 몰아서 요청하지 않음
+    return n, errs
+
+
 def _upsert(conn, sid: str, pts, source: str, now: str) -> int:
     conn.executemany("""INSERT INTO macro_points(series,date,value,source,fetched_at) VALUES(?,?,?,?,?)
                         ON CONFLICT(series,date) DO UPDATE SET value=excluded.value, source=excluded.source,
@@ -255,10 +359,21 @@ def collect(conn, today: date | None = None) -> dict:
     today = today or datetime.now(config.KST).date()
     now = iso()
     summary = {}
-    for src in ("fred", "ecos", "altme"):
+    for src in ("fred", "ecos", "altme", "datagokr", "yahoo"):
         key_name = SOURCES[src]["key"]
         key = get_key(key_name) if key_name else ""
         ids = [sid for sid, s in SERIES.items() if s[3] == src]
+        if src == "yahoo" and not yahoo_enabled():
+            _status(conn, src, "disabled", "꺼져 있음 — 관리자가 'API 키·자료 관리' 탭에서 켜면 수집합니다(비공식 경로, 이용약관 확인 필요)")
+            summary[src] = "disabled"
+            continue
+        if src == "yahoo":
+            n, errs = _collect_yahoo(conn, ids, today, now)
+            _status(conn, src, "ok" if not errs else ("partial" if n else ("blocked" if any("거부" in x or "429" in x or "robots" in x for x in errs) else "error")),
+                    "; ".join(errs[:4]) if errs else f"{len(ids)}개 종목·지수 갱신", n)
+            conn.commit()
+            summary[src] = "ok" if not errs else ("partial" if n else "error")
+            continue
         if key_name and not key:
             _status(conn, src, "not_configured", f"{key_name} 미등록 — 매크로 화면 'API 키·자료 관리' 탭(관리자 모드)에서 등록하면 자동 수집합니다")
             summary[src] = "not_configured"
@@ -279,6 +394,8 @@ def collect(conn, today: date | None = None) -> dict:
                     pts = fetch_fred(code, start, key)
                 elif src == "ecos":
                     pts = fetch_ecos(code, start, today, key)
+                elif src == "datagokr":
+                    pts = fetch_datagokr(code, max(start, date(2020, 1, 1)), today, key)
                 else:
                     pts = fetch_altme(min(HISTORY_DAYS, (today - start).days + 2))
                 n += _upsert(conn, sid, pts, src, now)
@@ -317,6 +434,30 @@ def refresh(trigger: str = "manual") -> dict | None:
     finally:
         STATE["running"] = False
         _lock.release()
+
+
+USER_COOLDOWN_MIN = int(os.environ.get("IPO_RADAR_MACRO_COOLDOWN_MIN", "10"))
+STALE_MIN = 30
+
+
+def last_checked(conn):
+    ensure(conn)
+    row = conn.execute("SELECT MAX(checked_at) t FROM macro_status WHERE source!='manual'").fetchone()
+    return datetime.fromisoformat(row["t"]) if row and row["t"] else None
+
+
+def user_refresh(conn) -> dict:
+    """이용자 새로고침: 자료가 30분 넘게 지났고 최근 10분 안에 수집한 적이 없을 때만 새로 수집한다."""
+    if STATE["running"]:
+        return {"started": False, "message": "이미 수집 중입니다. 끝나면 화면이 자동으로 바뀝니다."}
+    last = last_checked(conn)
+    age = (datetime.now(config.KST) - last).total_seconds() / 60 if last else None
+    if age is not None and age < STALE_MIN:
+        return {"started": False, "message": f"{int(age)}분 전에 수집한 최신 자료입니다."}
+    if age is not None and age < USER_COOLDOWN_MIN:
+        return {"started": False, "message": "잠시 후 다시 시도하세요."}
+    started = refresh_async("user")
+    return {"started": started, "message": "새 자료를 받는 중입니다(1~2분). 끝나면 화면이 자동으로 바뀝니다." if started else "이미 수집 중입니다."}
 
 
 def refresh_async(trigger: str = "manual") -> bool:
@@ -613,7 +754,7 @@ def build(conn) -> dict:
         senti["years"] = sorted({d[:4] for d, _ in _SENTI_CACHE["val"]["history"]}, reverse=True)
     return {"generated_at": iso(), "series": series, "status": status, "bonds": bonds, "sentiment": senti,
             "usage": usage_summary(conn, 365), "manual_help": MANUAL_HELP, "keys": key_info(),
-            "history_days": HISTORY_DAYS, "calendar": calendar(conn), "checks": morning_checks(raw),
+            "history_days": HISTORY_DAYS, "yahoo": yahoo_enabled(), "calendar": calendar(conn), "checks": morning_checks(raw),
             "refresh": {"running": STATE["running"], "last": STATE["last"], "last_error": STATE["last_error"],
                         "every_hours": REFRESH_HOURS}}
 
@@ -732,6 +873,13 @@ def morning_checks(raw: dict, today: date | None = None) -> list[dict]:
         a, b = last2(sid)
         if a and b and abs(a[1] - b[1]) >= 0.10:
             add("warn", sid, f"{name} 금리 전일 대비 {(a[1] - b[1]) * 100:+.0f}bp (기준 ±10bp 이상)", a[0])
+    for sid, name, lim in (("kr.kospi", "코스피", 1.5), ("kr.kosdaq", "코스닥", 2.0), ("y.sox", "필라델피아 반도체지수", 3.0),
+                           ("y.nq", "나스닥100 선물", 1.0), ("y.es", "S&P 500 선물", 1.0)):
+        a, b = last2(sid)
+        if a and b and b[1]:
+            pct = (a[1] / b[1] - 1) * 100
+            if abs(pct) >= lim:
+                add("warn", sid, f"{name} 전일 대비 {pct:+.2f}% (기준 ±{lim}% 이상)", a[0])
     a, b = last2("fx.usdkrw")
     if a and b and abs(a[1] - b[1]) >= 10:
         add("warn", "fx.usdkrw", f"원/달러 전일 대비 {a[1] - b[1]:+.1f}원 (기준 ±10원 이상)", a[0])

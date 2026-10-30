@@ -630,6 +630,16 @@ class TestServer(unittest.TestCase):
         self.assertNotIn("keys", json.loads(self.req("/api/macro", cookie=vck)[1]))     # 이용자에게 키 정보 없음
         self.assertTrue(json.loads(self.req("/api/macro", cookie=ack)[1])["status"]["ecos"]["key_set"])
         self.assertEqual(post("/admin/macro-key", json.dumps({"name": "ECOS_API_KEY", "key": "x y"}), ack)[0], 400)
+        # 이용자 새로고침(헤더 필요), Yahoo 켜기는 관리자만
+        self.assertEqual(post("/api/macro/refresh", "{}", vck, {"Content-Type": "application/json"})[0], 400)
+        code, raw = post("/api/macro/refresh", "{}", vck)
+        self.assertEqual(code, 200)
+        self.assertIn("message", json.loads(raw))
+        self.assertEqual(post("/admin/macro-yahoo", json.dumps({"on": True}), vck)[0], 403)
+        code, raw = post("/admin/macro-yahoo", json.dumps({"on": True}), ack)
+        self.assertTrue(json.loads(raw)["yahoo"])
+        self.assertTrue(json.loads(self.req("/api/macro", cookie=vck)[1])["yahoo"])
+        post("/admin/macro-yahoo", json.dumps({"on": False}), ack)
 
     def test_dockerfile_ships_every_tracked_dashboard_file(self):
         import subprocess
@@ -958,7 +968,8 @@ class TestMacro(unittest.TestCase):
         import os
         self.tmp = Path(tempfile.mkdtemp())
         self.conn = connect(self.tmp / "m.sqlite3")
-        self._env = {k: os.environ.get(k) for k in ("FRED_API_KEY", "ECOS_API_KEY", "IPO_RADAR_AI_PRICE_IN", "IPO_RADAR_AI_PRICE_OUT")}
+        self._env = {k: os.environ.get(k) for k in ("FRED_API_KEY", "ECOS_API_KEY", "DATA_GO_KR_KEY", "IPO_RADAR_YAHOO",
+                                                    "IPO_RADAR_AI_PRICE_IN", "IPO_RADAR_AI_PRICE_OUT")}
         from ipo_radar import db as db_mod
         self.addCleanup(setattr, db_mod, "DB_PATH", db_mod.DB_PATH)
         db_mod.DB_PATH = self.tmp / "m.sqlite3"  # 화면 입력 키 파일도 임시 폴더에
@@ -1001,7 +1012,7 @@ class TestMacro(unittest.TestCase):
             return 404, b""
         http.set_transport(net, sleep=lambda s: None)
         res = macro.collect(self.conn, today=date(2026, 10, 30))
-        self.assertEqual(res, {"fred": "partial", "ecos": "ok", "altme": "ok"})
+        self.assertEqual(res, {"fred": "partial", "ecos": "ok", "altme": "ok", "datagokr": "not_configured", "yahoo": "disabled"})
         rows = self.conn.execute("SELECT date, value FROM macro_points WHERE series='us.10y' ORDER BY date").fetchall()
         self.assertEqual([tuple(r) for r in rows], [("2026-10-27", 4.10), ("2026-10-29", 4.15)])  # "." 결측은 버림
         self.assertEqual(self.conn.execute("SELECT value FROM macro_points WHERE series='kr.3y' AND date='2026-10-29'").fetchone()[0], 2870.0)
@@ -1085,6 +1096,69 @@ class TestMacro(unittest.TestCase):
         self.assertIn(False, [c["verified"] for c in ev.values()])                  # 미확인 일정은 표시
         self.assertEqual([c["date"] for c in cal if c["kind"] == "event"], ["2026-11-26", "2026-12-09"])  # 60일 앞까지
         self.assertEqual(macro.calendar(self.conn, today=date(2027, 6, 1)), [])     # 지난 일정은 안 나옴
+
+    def test_datagokr_and_yahoo_parsing(self):
+        import os
+        from ipo_radar import macro
+        os.environ.pop("FRED_API_KEY", None)
+        os.environ.pop("ECOS_API_KEY", None)
+        os.environ["DATA_GO_KR_KEY"] = "abc+def/ghi=="           # 디코딩 키(+/= 포함)
+        seen = []
+        yahoo = {"chart": {"result": [{"meta": {"gmtoffset": 32400},
+                                       "timestamp": [1761696000, 1761782400, 1761868800],
+                                       "indicators": {"quote": [{"close": [70000.0, None, 71500.0]}]}}], "error": None}}
+
+        def net(url, headers, data=None):
+            seen.append((url, headers.get("User-Agent")))
+            if url.endswith("robots.txt"):
+                return 404, b""
+            if "apis.data.go.kr" in url:
+                idx = "코스피" if "%EC%BD%94%EC%8A%A4%ED%94%BC" in url else "코스닥"
+                return 200, json.dumps({"response": {"header": {"resultCode": "00"}, "body": {"totalCount": 2, "items": {"item": [
+                    {"basDt": "20261028", "idxNm": idx, "clpr": "2,601.5"}, {"basDt": "20261029", "idxNm": idx, "clpr": "2610.25"}]}}}}).encode()
+            if "finance.yahoo.com" in url:
+                return 200, json.dumps(yahoo).encode()
+            return 404, b""
+        http.set_transport(net, sleep=lambda s: None)
+        res = macro.collect(self.conn, today=date(2026, 10, 31))
+        self.assertEqual((res["datagokr"], res["yahoo"]), ("ok", "disabled"))
+        self.assertFalse(any("finance.yahoo.com" in u for u, _ in seen))   # 꺼져 있으면 요청하지 않음
+        self.assertTrue(any("serviceKey=abc%2Bdef%2Fghi%3D%3D" in u for u, _ in seen))
+        kospi = self.conn.execute("SELECT date, value FROM macro_points WHERE series='kr.kospi' ORDER BY date").fetchall()
+        self.assertEqual([tuple(r) for r in kospi], [("2026-10-28", 2601.5), ("2026-10-29", 2610.25)])
+        st = self.conn.execute("SELECT message FROM macro_status WHERE source='datagokr'").fetchone()[0]
+        self.assertNotIn("abc", st)
+        macro.set_yahoo(True)
+        self.assertTrue(macro.yahoo_enabled())
+        seen.clear()
+        res = macro.collect(self.conn, today=date(2026, 10, 31))
+        self.assertEqual(res["yahoo"], "ok")
+        ys = [(u, ua) for u, ua in seen if "query1.finance.yahoo.com/v8" in u]
+        self.assertEqual(len(ys), len([1 for v in macro.SERIES.values() if v[3] == "yahoo"]))
+        self.assertTrue(all(ua == config.USER_AGENT for _, ua in ys))          # 브라우저로 위장하지 않음
+        sam = self.conn.execute("SELECT date, value FROM macro_points WHERE series='y.samsung' ORDER BY date").fetchall()
+        self.assertEqual([tuple(r) for r in sam], [("2025-10-29", 70000.0), ("2025-10-31", 71500.0)])  # 빈 종가는 건너뜀
+        # 한도 초과(429)면 나머지 종목은 요청하지 않음
+        calls = []
+        http.set_transport(lambda u, h, d=None: calls.append(u) or ((404, b"") if u.endswith("robots.txt") else (429, b"")),
+                           sleep=lambda s: None)
+        macro.collect(self.conn, today=date(2026, 10, 31))
+        self.assertEqual(len([u for u in calls if "/v8/" in u]), 1)
+        macro.set_yahoo(False)
+        self.assertFalse(macro.yahoo_enabled())
+
+    def test_user_refresh_cooldown(self):
+        from ipo_radar import macro
+        orig = macro.refresh_async
+        started = []
+        macro.refresh_async = lambda trigger="manual": started.append(trigger) or True
+        self.addCleanup(setattr, macro, "refresh_async", orig)
+        self.assertTrue(macro.user_refresh(self.conn)["started"])              # 수집한 적 없음 → 수집
+        macro._status(self.conn, "fred", "ok", "", 1)
+        r = macro.user_refresh(self.conn)
+        self.assertFalse(r["started"])                                          # 방금 수집 → 최신 자료 안내
+        self.assertIn("최신 자료", r["message"])
+        self.assertEqual(started, ["user"])
 
     def test_missing_keys_marked_not_configured(self):
         import os

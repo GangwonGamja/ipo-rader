@@ -529,7 +529,17 @@ def make_handler(app):
                 res["access"] = access_info(app)
                 return self._send(200 if res["ok"] else 400, json.dumps(res, ensure_ascii=False).encode(),
                                   "application/json; charset=utf-8")
-            if path in ("/admin/macro-refresh", "/admin/macro-manual", "/admin/macro-key"):
+            if path == "/api/macro/refresh":  # 이용자도 쓰는 새로고침(수집 간격 제한 있음)
+                if self.headers.get("X-Requested-With") != "ipo-radar":
+                    return self._send(400, b"bad request")
+                from . import macro
+                conn = connect()
+                try:
+                    res = macro.user_refresh(conn)
+                finally:
+                    conn.close()
+                return self._send(200, json.dumps(res, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            if path in ("/admin/macro-refresh", "/admin/macro-manual", "/admin/macro-key", "/admin/macro-yahoo"):
                 if role != "admin":
                     return self._send(403, "관리자만 할 수 있습니다.".encode())
                 if self.headers.get("X-Requested-With") != "ipo-radar":
@@ -540,6 +550,19 @@ def make_handler(app):
                     return self._send(202 if started else 409, json.dumps(
                         {"started": started, "message": "매크로 지표 갱신을 시작했습니다" if started else "이미 갱신 중입니다"},
                         ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                if path == "/admin/macro-yahoo":
+                    n = int(self.headers.get("Content-Length") or 0)
+                    try:
+                        req = json.loads(self.rfile.read(min(n, 1024)) or b"{}")
+                    except ValueError:
+                        return self._send(400, b"bad json")
+                    on = bool(req.get("on"))
+                    res = macro.set_yahoo(on)
+                    log(f"관리자 화면에서 Yahoo Finance 수집 {'켬' if on else '끔'}")
+                    if on:
+                        res["refresh_started"] = macro.refresh_async("yahoo-on")
+                    res["yahoo"] = macro.yahoo_enabled()
+                    return self._send(200, json.dumps(res, ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 if path == "/admin/macro-key":
                     n = int(self.headers.get("Content-Length") or 0)
                     try:
