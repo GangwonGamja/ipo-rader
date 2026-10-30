@@ -590,6 +590,70 @@ class TestServer(unittest.TestCase):
             for k, v in saved.items():
                 os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
 
+    def test_admin_changes_user_code(self):
+        import os
+        old_db = config.DB_PATH
+        config.DB_PATH = self.tmp / "db.sqlite3"  # access.json을 임시 폴더에 저장
+        for k in ("RENDER_API_KEY", "RENDER_SERVICE_ID"):
+            os.environ.pop(k, None)
+        try:
+            H = {"X-Requested-With": "ipo-radar", "Content-Type": "application/json"}
+            _, _, vck = self.login("team-0915")
+            _, _, ack = self.login("admin-code-1")
+
+            def post(body, ck):
+                import http.client
+                c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+                c.request("POST", "/admin/user-code", body=json.dumps(body), headers={**H, "Cookie": ck})
+                r = c.getresponse()
+                raw = r.read()
+                try:
+                    out = (r.status, json.loads(raw or b"{}"))
+                except ValueError:
+                    out = (r.status, {"text": raw.decode()})
+                c.close()
+                return out
+            self.assertEqual(post({"code": "newteam1"}, vck)[0], 403)            # 이용자는 못 바꿈
+            self.assertEqual(post({"code": "abc"}, ack)[0], 400)                 # 너무 짧음
+            self.assertEqual(post({"code": "admin-code-1"}, ack)[0], 400)        # 관리자 코드와 같음
+            code, res = post({"code": "newteam1"}, ack)
+            self.assertEqual((code, res["ok"], res["access"]["source"]), (200, True, "dashboard"))
+            self.assertIsNone(res["render_synced"])                              # Render 키 없으면 동기화 안 함
+            self.assertEqual(self.req("/", cookie=vck)[0], 303)                  # 기존 이용자 세션 끊김
+            self.assertEqual(self.req("/", cookie=ack)[0], 200)                  # 관리자 세션 유지
+            self.assertEqual(self.login("team-0915")[1], "/login?mode=viewer&e=1")
+            self.assertEqual(self.login("newteam1")[1], "/")
+            saved = json.loads((self.tmp / "access.json").read_text())
+            self.assertNotIn("newteam1", json.dumps(saved))                      # 원문이 아니라 해시로 저장
+            # 재시작 시 저장된 코드를 다시 읽음
+            old_users, old_pw = config.SERVER_USERS, config.SERVER_ADMIN_PASSWORD
+            config.SERVER_USERS, config.SERVER_ADMIN_PASSWORD = "", "admin-code-1"
+            try:
+                codes = self.server_mod._codes_from_env()
+                self.assertTrue(self.server_mod.check_code({"codes": codes}, "newteam1", "viewer"))
+            finally:
+                config.SERVER_USERS, config.SERVER_ADMIN_PASSWORD = old_users, old_pw
+            code, res = post({"disable": True}, ack)
+            self.assertEqual((code, res["access"]["user_code_set"]), (200, False))
+            self.assertEqual(self.login("newteam1")[1], "/login?mode=viewer&e=1")
+        finally:
+            config.DB_PATH = old_db
+
+    def test_render_sync_called_when_configured(self):
+        import os
+        old_db = config.DB_PATH
+        config.DB_PATH = self.tmp / "db.sqlite3"
+        calls = []
+        try:
+            res = self.server_mod.set_user_code(self.app, "teamcode9", sync=lambda v: (calls.append(v) or (True, "ok")))
+            self.assertEqual((res["ok"], res["render_synced"], calls), (True, True, ["teamcode9"]))
+            os.environ["RENDER_API_KEY"], os.environ["RENDER_SERVICE_ID"] = "k", "srv-x"
+            self.assertTrue(self.server_mod.access_info(self.app)["render_sync"])
+        finally:
+            config.DB_PATH = old_db
+            os.environ.pop("RENDER_API_KEY", None)
+            os.environ.pop("RENDER_SERVICE_ID", None)
+
     def test_lockout(self):
         for _ in range(10):
             self.login("bad-code")

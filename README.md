@@ -9,6 +9,8 @@
 - 이용자 모드에는 '데이터 관리' 탭, '지금 갱신' 버튼, 자료원 오류 내용, 실행 기록이 없습니다. 서버가 아예 다른 파일(`*_view.html`, `data_view.json`)을 보내므로 화면 조작으로도 볼 수 없습니다.
 - 세션은 서명된 쿠키(HttpOnly·SameSite=Strict·HTTPS에서 Secure)로 12시간 유지됩니다(`IPO_RADAR_SESSION_HOURS`). 코드를 바꾸면 기존 세션이 모두 끊깁니다.
 - 코드를 10회 틀리면 그 IP는 15분간 잠깁니다. 예전 설정 `IPO_RADAR_ADMIN_PASSWORD`도 관리자 코드로 인정합니다.
+- **이용자 코드는 관리자 모드 → 데이터 관리 탭에서 바꾸거나 끌 수 있습니다.** 서버에 해시로 저장되고(`access.json`, 환경변수보다 우선), 바꾸면 기존 이용자 세션만 끊깁니다(관리자 세션 유지).
+- Render 무료 플랜은 재시작 시 저장 공간이 비워집니다. `RENDER_API_KEY`(와 Render가 자동으로 넣는 `RENDER_SERVICE_ID`)가 있으면 바꾼 코드를 Render 환경변수 `IPO_RADAR_USER_CODE`에도 저장해 재시작 후에도 유지합니다.
 
 ## 서버로 운영하기 (권장)
 

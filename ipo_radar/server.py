@@ -177,7 +177,7 @@ def _unb64(s: str) -> bytes:
 def make_token(app, role: str, now: float | None = None) -> str:
     exp = int((now or time.time()) + SESSION_HOURS * 3600)
     payload = f"{role}|{exp}".encode()
-    sig = hmac.new(app["key"], payload, hashlib.sha256).hexdigest()
+    sig = hmac.new(app["keys"][role], payload, hashlib.sha256).hexdigest()
     return f"{_b64(payload)}.{sig}"
 
 
@@ -186,10 +186,12 @@ def read_token(app, token: str | None, now: float | None = None) -> str | None:
     try:
         p, sig = (token or "").split(".", 1)
         payload = _unb64(p)
-        if not hmac.compare_digest(hmac.new(app["key"], payload, hashlib.sha256).hexdigest(), sig):
-            return None
         role, exp = payload.decode().split("|")
-        if int(exp) < (now or time.time()) or role not in ("admin", "viewer"):
+        if role not in ("admin", "viewer"):
+            return None
+        if not hmac.compare_digest(hmac.new(app["keys"][role], payload, hashlib.sha256).hexdigest(), sig):
+            return None
+        if int(exp) < (now or time.time()):
             return None
         return role
     except Exception:
@@ -210,6 +212,77 @@ def check_code(app, code: str, mode: str | None = None) -> str | None:
         if ok:
             return c["role"]
     return None
+
+
+def role_keys(codes: list[dict]) -> dict:
+    """역할마다 다른 서명 키. 이용자 코드를 바꾸면 이용자 세션만 끊기고 관리자 세션은 유지된다."""
+    extra = os.environ.get("IPO_RADAR_SECRET", "")
+    keys = {}
+    for role in ("admin", "viewer"):
+        src = "|".join(sorted(c["secret"] for c in codes if c["role"] == role))
+        keys[role] = hashlib.sha256(f"ipo-radar-session|{role}|{src}|{extra}".encode("utf-8")).digest()
+    return keys
+
+
+# ---------- 이용자 코드: 관리자 화면에서 변경 ----------
+
+def access_file() -> Path:
+    return Path(config.DB_PATH).parent / "access.json"
+
+
+def load_access() -> dict:
+    try:
+        return json.loads(access_file().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def render_sync(value: str | None) -> tuple[bool | None, str]:
+    """Render 환경변수 IPO_RADAR_USER_CODE에도 저장(재시작 후에도 유지). RENDER_API_KEY 없으면 None."""
+    api_key, sid = os.environ.get("RENDER_API_KEY"), os.environ.get("RENDER_SERVICE_ID")
+    if not (api_key and sid):
+        return None, "Render API 키 미연결 — 서버가 재시작되면 Render 환경변수 값으로 돌아갑니다"
+    import urllib.request
+    url = f"https://api.render.com/v1/services/{sid}/env-vars/IPO_RADAR_USER_CODE"
+    data = json.dumps({"value": value}).encode() if value is not None else None
+    req = urllib.request.Request(url, data=data, method="PUT" if value is not None else "DELETE", headers={
+        "Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return (200 <= r.status < 300), "Render 환경변수에도 저장했습니다(재시작 후에도 유지)"
+    except Exception as e:
+        return False, f"Render 환경변수 저장 실패: {type(e).__name__}: {e}"[:200]
+
+
+def set_user_code(app, code: str | None, *, sync=render_sync) -> dict:
+    """이용자 코드 변경(None이면 이용자 접속 끄기). 서버 파일에 해시로 저장하고 이용자 세션을 모두 끊는다."""
+    if code is not None:
+        code = code.strip()
+        if len(code) < 6:
+            return {"ok": False, "message": "이용자 코드는 6자 이상이어야 합니다."}
+        if check_code(app, code, "admin"):
+            return {"ok": False, "message": "관리자 코드와 다른 코드를 정하세요."}
+    rec = {"updated_at": iso()}
+    rec.update({"user_code_hash": hash_password(code)} if code is not None else {"user_code_disabled": True})
+    f = access_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(rec), encoding="utf-8")
+    app["codes"] = [c for c in app["codes"] if c["role"] != "viewer"] + (
+        [{"role": "viewer", "secret": rec["user_code_hash"]}] if code is not None else [])
+    app["keys"] = role_keys(app["codes"])
+    synced, sync_msg = sync(code)
+    log("관리자 화면에서 이용자 코드 " + ("변경" if code is not None else "끄기"))
+    return {"ok": True, "message": ("이용자 코드를 바꿨습니다. 기존 이용자 접속은 모두 끊겼습니다."
+                                    if code is not None else "이용자 접속을 껐습니다."),
+            "render_synced": synced, "sync_message": sync_msg}
+
+
+def access_info(app) -> dict:
+    acc = load_access()
+    has_viewer = any(c["role"] == "viewer" for c in app["codes"])
+    source = "dashboard" if acc else ("env" if os.environ.get("IPO_RADAR_USER_CODE") else None)
+    return {"user_code_set": has_viewer, "source": source, "updated_at": acc.get("updated_at"),
+            "render_sync": bool(os.environ.get("RENDER_API_KEY") and os.environ.get("RENDER_SERVICE_ID"))}
 
 
 def view_name(index: str) -> str:
@@ -360,7 +433,8 @@ def make_handler(app):
                 st = app["runner"].state
                 body = {"role": role, "user": "관리자" if admin else "이용자", "running": st["running"], "next": st.get("next")}
                 if admin:
-                    body.update(last=st.get("last"), last_error=st.get("last_error"), started_at=st.get("started_at"))
+                    body.update(last=st.get("last"), last_error=st.get("last_error"), started_at=st.get("started_at"),
+                                access=access_info(app))
                 dj = app["out"] / "data.json"
                 if dj.is_file():
                     try:
@@ -391,6 +465,20 @@ def make_handler(app):
             role = self._role()
             if not role:
                 return self._need_login(path)
+            if path == "/admin/user-code":
+                if role != "admin":
+                    return self._send(403, "관리자만 바꿀 수 있습니다.".encode())
+                if self.headers.get("X-Requested-With") != "ipo-radar":
+                    return self._send(400, b"bad request")
+                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    req = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+                except ValueError:
+                    return self._send(400, b"bad json")
+                res = set_user_code(app, None if req.get("disable") else str(req.get("code") or ""))
+                res["access"] = access_info(app)
+                return self._send(200 if res["ok"] else 400, json.dumps(res, ensure_ascii=False).encode(),
+                                  "application/json; charset=utf-8")
             if path == "/admin/refresh":
                 if role != "admin":
                     return self._send(403, "관리자만 수집을 실행할 수 있습니다.".encode())
@@ -435,6 +523,11 @@ def _codes_from_env() -> list[dict]:
     codes = []
     admin = os.environ.get("IPO_RADAR_ADMIN_CODE") or config.SERVER_ADMIN_PASSWORD  # 예전 설정(관리자 비밀번호)도 관리자 코드로 인정
     user = os.environ.get("IPO_RADAR_USER_CODE", "")
+    acc = load_access()  # 관리자 화면에서 정한 이용자 코드(해시)가 환경변수보다 우선
+    if acc.get("user_code_hash"):
+        user = acc["user_code_hash"]
+    elif acc.get("user_code_disabled"):
+        user = ""
     if admin:
         codes.append({"role": "admin", "secret": admin})
     if user:
@@ -457,8 +550,6 @@ def build_app(out_dir: Path | None = None, codes: list[dict] | None = None, anon
         raise SystemExit("관리자 코드와 이용자 코드는 서로 달라야 합니다.")
     if not any(c["role"] == "admin" for c in codes) and not anon:
         raise SystemExit("관리자 코드가 없습니다. IPO_RADAR_ADMIN_CODE(관리자)와 IPO_RADAR_USER_CODE(이용자)를 설정하세요.")
-    key_src = "|".join(sorted(c["secret"] for c in codes)) + "|" + os.environ.get("IPO_RADAR_SECRET", "")
-    key = hashlib.sha256(("ipo-radar-session|" + key_src).encode("utf-8")).digest()
     brand_file = config.DATA_DIR / "brand.json"
     index, brand = "index.html", None
     if brand_file.exists() and config.SERVER_BRAND:
@@ -467,7 +558,7 @@ def build_app(out_dir: Path | None = None, codes: list[dict] | None = None, anon
         logo = config.ROOT / brand.get("logo", "")
         if brand.get("logo") and logo.is_file():
             brand["logo_data"] = "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode()
-    return {"out": out, "codes": codes, "key": key, "anon": anon, "guard": LoginGuard(), "index": index, "brand": brand,
+    return {"out": out, "codes": codes, "keys": role_keys(codes), "anon": anon, "guard": LoginGuard(), "index": index, "brand": brand,
             "runner": Runner(out, config.SERVER_WITH_SAMPLE if with_sample is None else with_sample),
             "trust_proxy": os.environ.get("IPO_RADAR_TRUST_PROXY", "1") == "1" if trust_proxy is None else trust_proxy}
 

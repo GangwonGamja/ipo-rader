@@ -671,10 +671,28 @@ const NEED = {ipostock:"네트워크 허용: www.ipostock.co.kr", dart:"DART_API
   naver_stock_board:"상장 후 사용 가능", naver_datalab:"네이버 개발자센터 앱에 '데이터랩(검색어트렌드)' 추가 + NAVER 키", youtube:"YOUTUBE_API_KEY (Google Cloud에서 YouTube Data API v3 사용 설정)", ai_api:"GEMINI_API_KEY (aistudio.google.com에서 무료 발급)", krx:"KRX_AUTH_KEY (openapi.krx.co.kr)"};
 const SNAME = {ipostock:"IPOSTOCK 일정", dart:"DART 공시", dart_financials:"DART 재무", naver_news:"네이버 뉴스", naver_blog:"네이버 블로그", naver_cafe:"네이버 카페", naver_stock_board:"네이버 종목토론방", naver_datalab:"네이버 데이터랩 검색 추이", youtube:"유튜브 영상 반응", krx:"KRX 시세", ai_api:"AI 요약 (Gemini)"};
 const SST = {ok:["정상","good"],error:["실패","bad"],blocked:["접근 차단","bad"],not_configured:["설정 필요","warn"],disabled:["비활성","hold"]};
+function accessCard(){
+  const a = (typeof SRV!=="undefined" && SRV.access) || null;
+  if(!a) return `<section class="card"><div class="ch"><h2>이용자 접속 코드</h2></div><div class="cb"><span class="muted small">웹 서버로 접속했을 때만 설정할 수 있습니다. 상태를 불러오는 중이면 잠시 후 다시 열어 주세요.</span></div></section>`;
+  const src = a.source==="dashboard" ? `관리자 화면에서 설정 · ${esc(ago(a.updated_at))}` : a.source==="env" ? "Render 환경변수(IPO_RADAR_USER_CODE)" : "설정 안 됨";
+  return `<section class="card"><div class="ch"><h2>이용자 접속 코드</h2><span class="chip ${a.user_code_set?"good":"warn"}">${a.user_code_set?"이용자 접속 가능":"이용자 접속 꺼짐"}</span></div><div class="cb">
+    <div class="small">현재 코드 출처: <b>${src}</b> · 코드는 해시로만 저장되어 화면에 다시 표시되지 않습니다.</div>
+    <div class="filters">
+      <input type="password" id="uc-code" placeholder="새 이용자 코드 (6자 이상)" autocomplete="new-password" style="width:220px">
+      <label><input type="checkbox" id="uc-show"> 코드 보기</label>
+      <button class="btn pri" id="uc-save">이용자 코드 변경</button>
+      <button class="btn" id="uc-off">이용자 접속 끄기</button>
+    </div>
+    <div class="small muted">변경하면 이미 들어와 있는 이용자는 모두 로그아웃되고, 새 코드로 다시 들어와야 합니다. 관리자 접속은 유지됩니다. 관리자 코드와 같은 코드는 쓸 수 없습니다.</div>
+    ${a.render_sync?`<div class="small" style="color:var(--good)">Render 설정 연동됨 — 바꾼 코드가 서버 재시작 후에도 유지됩니다.</div>`
+      :`<div class="banner"><b>서버가 재시작되면 초기화될 수 있습니다</b><span>무료 플랜은 서버가 잠들거나 재시작하면 저장 공간이 비워져, 여기서 바꾼 코드가 Render 환경변수의 코드로 돌아갑니다. 유지하려면 Render 대시보드 → Account Settings → API Keys에서 키를 만들어 이 서비스의 Environment에 <b>RENDER_API_KEY</b>로 넣어 주세요.</span></div>`}
+    <div id="uc-msg" class="small" role="status"></div>
+  </div></section>`;
+}
 function sourcesTab(){
   const lr = DATA.meta.last_run; let stages = {};
   try{ stages = JSON.parse(lr.stages||"{}"); }catch(e){}
-  return `<section class="card"><div class="ch"><h2>자료원 연결 상태</h2><span class="muted small">실패한 자료원은 기존 데이터를 유지하고 마지막 성공 시각을 표시합니다</span></div><div class="cb">
+  return `${accessCard()}<section class="card"><div class="ch"><h2>자료원 연결 상태</h2><span class="muted small">실패한 자료원은 기존 데이터를 유지하고 마지막 성공 시각을 표시합니다</span></div><div class="cb">
   <div class="tbl-wrap"><table><thead><tr><th>자료원</th><th>상태</th><th>마지막 성공</th><th>마지막 시도</th><th>연속 실패</th><th>필요한 조치</th><th>오류 내용</th></tr></thead><tbody>
   ${DATA.sources.map(s=>`<tr><td>${esc(SNAME[s.source]||s.source)}</td><td><span class="chip ${(SST[s.status]||["","hold"])[1]}">${esc((SST[s.status]||[s.status])[0])}</span></td>
     <td class="num small">${s.last_success?esc(ago(s.last_success)):"없음"}</td><td class="num small">${esc(ago(s.last_attempt))}</td><td class="num">${s.consecutive_failures}</td>
@@ -1129,9 +1147,11 @@ async function pollStatus(){
     const r = await fetch("api/status", {cache:"no-store", credentials:"same-origin"});
     if(!r.ok) return;
     const st = await r.json();
-    Object.assign(SRV, {on:true, role:st.role, user:st.user, running:!!st.running, next:st.next,
+    const hadAccess = !!SRV.access;
+    Object.assign(SRV, {on:true, role:st.role, user:st.user, running:!!st.running, next:st.next, access:st.access||null,
       newer: !!(st.generated_at && st.generated_at !== DATA.meta.generated_at && new Date(st.generated_at) > new Date(DATA.meta.generated_at))});
     renderServerBar();
+    if(!hadAccess && SRV.access && S.tab==="sources") renderTab();
   }catch(e){}
 }
 function renderServerBar(){
@@ -1147,6 +1167,22 @@ function renderServerBar(){
   const u = document.getElementById("srvuser");
   if(u) u.innerHTML = `${SRV.role==="admin"?`<span class="chip house">관리자 모드</span> <button class="btn" id="btn-refresh" ${SRV.running?"disabled":""}>지금 갱신</button>`:`<span class="chip line">이용자 모드</span>`} <a class="btn" href="/logout">로그아웃</a>`;
 }
+async function saveUserCode(body){
+  const msg = document.getElementById("uc-msg");
+  try{
+    const r = await fetch("admin/user-code", {method:"POST", credentials:"same-origin",
+      headers:{"X-Requested-With":"ipo-radar","Content-Type":"application/json"}, body: JSON.stringify(body)});
+    const j = await r.json().catch(()=>({message:"응답을 읽지 못했습니다"}));
+    if(j.access) SRV.access = j.access;
+    if(r.ok){ renderTab(); const m=document.getElementById("uc-msg"); if(m){ m.style.color="var(--good)"; m.textContent = j.message + (j.sync_message?" · "+j.sync_message:""); } flash(j.message); }
+    else if(msg){ msg.style.color="var(--bad)"; msg.textContent = j.message || "변경하지 못했습니다"; }
+  }catch(err){ if(msg){ msg.style.color="var(--bad)"; msg.textContent="서버에 연결하지 못했습니다"; } }
+}
+document.addEventListener("click", e=>{
+  if(e.target.id==="uc-save"){ const v=(document.getElementById("uc-code")||{}).value||""; saveUserCode({code:v}); }
+  if(e.target.id==="uc-off"){ const m=document.getElementById("uc-msg"); if(e.target.dataset.confirm!=="1"){ e.target.dataset.confirm="1"; e.target.textContent="한 번 더 누르면 이용자 접속을 끕니다"; return; } saveUserCode({disable:true}); }
+});
+document.addEventListener("change", e=>{ if(e.target.id==="uc-show"){ const i=document.getElementById("uc-code"); if(i) i.type = e.target.checked?"text":"password"; } });
 document.addEventListener("click", async e=>{
   if(e.target.id!=="btn-refresh") return;
   e.target.disabled = true;

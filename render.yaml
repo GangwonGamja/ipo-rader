@@ -11,7 +11,9 @@ services:
     envVars:
       - key: IPO_RADAR_ADMIN_CODE      # 관리자 접속 코드(8자 이상) → 관리자 모드
         sync: false
-      - key: IPO_RADAR_USER_CODE       # 이용자(부서원) 접속 코드(6자 이상) → 이용자 모드
+      - key: IPO_RADAR_USER_CODE       # 이용자(부서원) 접속 코드(6자 이상) → 이용자 모드. 관리자 화면에서도 변경 가능
+        sync: false
+      - key: RENDER_API_KEY            # (선택) 관리자 화면에서 바꾼 이용자 코드를 Render 설정에도 저장해 재시작 후에도 유지
         sync: false
       - key: IPO_RADAR_BRAND           # 1=건대역지점 화면, 0=로고 없는 일반 화면
         value: "1"

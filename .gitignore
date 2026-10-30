@@ -9,3 +9,4 @@ dashboard/*.ics
 dashboard/*.csv
 dashboard/*_view.html
 dashboard/data_view.json
+data/access.json
