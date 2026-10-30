@@ -237,13 +237,13 @@ def load_access() -> dict:
         return {}
 
 
-def render_sync(value: str | None) -> tuple[bool | None, str]:
-    """Render 환경변수 IPO_RADAR_USER_CODE에도 저장(재시작 후에도 유지). RENDER_API_KEY 없으면 None."""
+def render_sync(value: str | None, name: str = "IPO_RADAR_USER_CODE") -> tuple[bool | None, str]:
+    """Render 환경변수(name)에도 저장(재시작 후에도 유지). RENDER_API_KEY 없으면 None."""
     api_key, sid = os.environ.get("RENDER_API_KEY"), os.environ.get("RENDER_SERVICE_ID")
     if not (api_key and sid):
-        return None, "Render API 키 미연결 — 서버가 재시작되면 Render 환경변수 값으로 돌아갑니다"
+        return None, "Render API 키 미연결 — 서버가 재시작·재배포되면 이 값이 사라질 수 있습니다(Render 무료 플랜)"
     import urllib.request
-    url = f"https://api.render.com/v1/services/{sid}/env-vars/IPO_RADAR_USER_CODE"
+    url = f"https://api.render.com/v1/services/{sid}/env-vars/{name}"
     data = json.dumps({"value": value}).encode() if value is not None else None
     req = urllib.request.Request(url, data=data, method="PUT" if value is not None else "DELETE", headers={
         "Authorization": f"Bearer {api_key}", "Accept": "application/json", "Content-Type": "application/json"})
@@ -442,6 +442,7 @@ def make_handler(app):
                         st.pop("message", None)
                         st.pop("key_set", None)
                     body["refresh"].pop("last_error", None)
+                    body.pop("keys", None)
                 return self._send(200, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             if path == "/data.json":
                 return self._file("data.json" if admin else "data_view.json", "application/json; charset=utf-8")
@@ -499,7 +500,7 @@ def make_handler(app):
                 res["access"] = access_info(app)
                 return self._send(200 if res["ok"] else 400, json.dumps(res, ensure_ascii=False).encode(),
                                   "application/json; charset=utf-8")
-            if path in ("/admin/macro-refresh", "/admin/macro-manual"):
+            if path in ("/admin/macro-refresh", "/admin/macro-manual", "/admin/macro-key"):
                 if role != "admin":
                     return self._send(403, "관리자만 할 수 있습니다.".encode())
                 if self.headers.get("X-Requested-With") != "ipo-radar":
@@ -510,6 +511,21 @@ def make_handler(app):
                     return self._send(202 if started else 409, json.dumps(
                         {"started": started, "message": "매크로 지표 갱신을 시작했습니다" if started else "이미 갱신 중입니다"},
                         ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                if path == "/admin/macro-key":
+                    n = int(self.headers.get("Content-Length") or 0)
+                    try:
+                        req = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+                    except ValueError:
+                        return self._send(400, b"bad json")
+                    name = str(req.get("name") or "")
+                    res = macro.set_key(name, None if req.get("clear") else str(req.get("key") or ""),
+                                        sync=lambda v: render_sync(v, name))
+                    if res["ok"]:
+                        log(f"관리자 화면에서 {name} {'삭제' if req.get('clear') else '저장'}")
+                        res["refresh_started"] = macro.refresh_async("key-saved")  # 저장 즉시 수집해 키가 맞는지 확인
+                    res["keys"] = macro.key_info()
+                    return self._send(200 if res["ok"] else 400, json.dumps(res, ensure_ascii=False).encode(),
+                                      "application/json; charset=utf-8")
                 n = int(self.headers.get("Content-Length") or 0)
                 if n > 2_000_000:
                     return self._send(413, "입력이 너무 깁니다(2MB 이하).".encode())

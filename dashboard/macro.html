@@ -114,6 +114,7 @@ const store = { get(k,d){ try{ const v=localStorage.getItem("macro:"+k); return 
                 set(k,v){ try{ localStorage.setItem("macro:"+k, JSON.stringify(v)); }catch(e){} } };
 const RANGES = [["1m","1개월",31],["3m","3개월",92],["6m","6개월",183],["1y","1년",366],["3y","3년",1100]];
 const COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
+const KEYMSG = {};
 let D = null, RANGE = store.get("range","1y"), POLL = null;
 const CHARTS = [];
 const $ = s => document.querySelector(s);
@@ -221,7 +222,7 @@ function empty(title, why){ return `<div class="empty"><b>${esc(title)}</b><span
 function needWhy(source){
   const st = D.status[source] || {};
   if(source==="manual") return "무료 공개 API가 없는 자료라 관리자가 값을 입력하면 그래프로 표시됩니다.";
-  if(st.status==="not_configured") return `${esc(st.key)}를 서버 환경변수에 넣으면 자동 수집됩니다.`;
+  if(st.status==="not_configured") return ADMIN ? `${esc(st.key)}를 이 화면 맨 아래 ‘API 키’에 넣으면 자동 수집됩니다.` : "관리자가 API 키를 넣으면 자동 수집됩니다.";
   if(st.status==="never") return "아직 수집하지 않았습니다. 첫 수집이 끝나면 표시됩니다.";
   return "자료를 받지 못했습니다" + (ADMIN && st.message ? ` — ${esc(st.message)}` : "") + ".";
 }
@@ -307,6 +308,26 @@ function statusCard(){
     return `<tr><td>${esc(s.name)}${s.url?` <a class="small muted" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">출처</a>`:""}</td><td><span class="chip ${cls}">${lab}</span></td><td class="num">${kst(s.checked_at)}</td>${ADMIN?`<td class="small">${s.key?`${esc(s.key)}: ${s.key_set?"설정됨":"없음"} · `:""}${esc(s.message||"")}</td>`:""}</tr>`; }).join("");
   return `<div class="tw"><table><thead><tr><th>자료원</th><th>상태</th><th>마지막 확인</th>${ADMIN?"<th>내용</th>":""}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+const KEY_HELP = {ECOS_API_KEY:["한국은행 ECOS","ecos.bok.or.kr/api → 인증키 신청(무료)","한국 기준금리·국고채 3/10/30년·원/달러"],
+                  FRED_API_KEY:["FRED(미국 세인트루이스 연준)","fredaccount.stlouisfed.org → API Keys(무료)","미국 금리·국채·회사채 스프레드·VIX·S&P 500·달러·유가"]};
+function keyCard(){
+  const ks = (D.keys||[]).slice().sort((a,b)=>a.name==="ECOS_API_KEY"?-1:1);
+  const src = {dashboard:"이 화면에서 입력", env:"서버 환경변수"};
+  return `<section class="card" id="keys"><div class="ch"><h2>API 키</h2><span class="muted small">관리자만 보임 · 저장한 키는 다시 보여 주지 않습니다(끝 4자리만 표시)</span></div><div class="cb">
+    ${ks.map(k=>{ const h = KEY_HELP[k.name]||[k.name,"",""]; const st = D.status[k.name==="ECOS_API_KEY"?"ecos":"fred"]||{}; const [lab,cls] = STATUS[st.status]||["",""];
+      return `<div class="panel" style="border:1px solid var(--line);border-radius:var(--r);padding:12px">
+        <h3>${esc(h[0])} <span class="muted small num">${esc(k.name)}</span></h3>
+        <span class="small">${k.set?`<span class="chip ok">설정됨 ····${esc(k.tail)}</span> ${src[k.source]||""}${k.updated_at?` · ${kst(k.updated_at)}`:""}`:`<span class="chip warn">없음</span>`} ${lab?`· 수집 상태 <span class="chip ${cls}">${lab}</span>`:""}</span>
+        <span class="small muted">받는 자료: ${esc(h[2])} · 발급: ${esc(h[1])}</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="password" id="key-${k.name}" autocomplete="off" spellcheck="false" placeholder="${k.set?"새 키로 바꾸려면 입력":"발급받은 키 붙여 넣기"}" aria-label="${esc(h[0])} API 키"
+            style="flex:1;min-width:200px;font:inherit;font-family:var(--f-num);padding:7px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--ink)">
+          <button class="btn pri" data-keysave="${k.name}">저장 후 수집</button>
+          ${k.source==="dashboard"?`<button class="btn" data-keyclear="${k.name}">지우기</button>`:""}
+        </div><span class="small" id="msg-${k.name}" role="status" style="color:${KEYMSG[k.name]?KEYMSG[k.name][0]:"inherit"}">${esc(KEYMSG[k.name]?KEYMSG[k.name][1]:"")}</span></div>`; }).join("")}
+    <p class="note">키는 서버 파일에만 저장되고 화면·이용자에게 보내지 않습니다. Render 무료 플랜은 재배포·재시작 때 서버 파일이 지워질 수 있어, RENDER_API_KEY·RENDER_SERVICE_ID가 설정돼 있으면 Render 환경변수에도 함께 저장합니다. 키를 채팅·메신저에 붙여 넣지 마세요.</p>
+  </div></section>`;
+}
 function adminCard(){
   if(!ADMIN) return "";
   const manual = Object.values(D.series).filter(s=>s.source==="manual" && s.points.length);
@@ -330,7 +351,7 @@ function render(){
   <div class="bar"><div class="seg" role="group" aria-label="그래프 기간">${RANGES.map(r=>`<button data-range="${r[0]}" aria-pressed="${r[0]===RANGE}">${r[1]}</button>`).join("")}</div>
     <span>화면 생성 ${kst(D.generated_at)}</span><span>자동 갱신 ${fresh.every_hours||6}시간마다</span>
     ${fresh.running?`<span class="chip warn">갱신 중…</span>`:""}</div>
-  ${!anyData?`<div class="banner"><b>아직 수집된 지표가 없습니다.</b><span>FRED_API_KEY·ECOS_API_KEY를 서버 환경변수에 넣으면 금리·국채·환율·VIX 등을 자동으로 받습니다. 두 키 모두 무료 발급입니다.</span></div>`:""}
+  ${!anyData?`<div class="banner"><b>아직 수집된 지표가 없습니다.</b><span>${ADMIN?`이 화면 맨 아래 <a href="#keys">API 키</a>에 ECOS·FRED 키를 넣으면`:"관리자가 ECOS·FRED API 키를 넣으면"} 금리·국채·환율·VIX 등을 자동으로 받습니다. 두 키 모두 무료 발급입니다.</span></div>`:""}
   <div class="kpis">
     ${kpi("미국 국채 10년","us.10y",{dec:2})}
     ${kpi("국고채 3년","kr.3y",{dec:3})}
@@ -383,6 +404,7 @@ function render(){
 
   <section class="card"><div class="ch"><h2>자료원 상태</h2><span class="muted small">숫자는 각 기관 공개 자료이며 지연·수정될 수 있습니다</span></div><div class="cb">${statusCard()}
     <p class="note">FRED 자료: Federal Reserve Bank of St. Louis(원 출처는 미 재무부·연준·ICE·CBOE·S&P·노동통계국 등). 한국 자료: 한국은행 경제통계시스템(ECOS). 투자 권유가 아닌 참고 자료입니다.</p></div></section>
+  ${ADMIN?keyCard():""}
   ${adminCard()}`;
 }
 
@@ -416,6 +438,15 @@ document.addEventListener("click", async e=>{
     const r = await post("/admin/macro-manual", {text});
     if(r.saved){ await load(true); const m=$("#mi-msg"); if(m){ m.style.color="var(--good)"; m.textContent = r.message + (r.errors&&r.errors.length?" — "+r.errors.join(" / "):""); } if(r.errors && r.errors.length){ const ta=$("#mi-text"); if(ta) ta.value = text; } }
     else { msg.style.color="var(--bad)"; msg.textContent = (r.message||"저장하지 못했습니다") + (r.errors&&r.errors.length?" — "+r.errors.join(" / "):""); }
+    return; }
+  if(b.dataset.keysave || b.dataset.keyclear){
+    const name = b.dataset.keysave || b.dataset.keyclear, inp = document.getElementById("key-"+name), msg = document.getElementById("msg-"+name);
+    let body;
+    if(b.dataset.keysave){ const v = (inp.value||"").trim(); if(!v){ msg.style.color="var(--bad)"; msg.textContent="키를 입력하세요"; return; } body = {name, key:v}; }
+    else { if(!confirm("이 화면에서 넣은 키를 지울까요?")) return; body = {name, clear:true}; }
+    b.disabled = true; const r = await post("/admin/macro-key", body); inp.value = "";
+    if(r.ok){ KEYMSG[name] = ["var(--good)", r.message + (r.sync_message?" · "+r.sync_message+".":"") + " 수집 결과는 위 ‘수집 상태’에 표시됩니다(15초마다 갱신)."]; await load(true); if(r.refresh_started) startPoll(); }
+    else { b.disabled = false; msg.style.color="var(--bad)"; msg.textContent = r.message || "저장하지 못했습니다"; }
     return; }
   if(b.dataset.del){ if(!confirm(`${b.dataset.del} 시리즈의 관리자 입력 값을 모두 지울까요? 되돌릴 수 없습니다.`)) return;
     const r = await post("/admin/macro-manual", {delete: b.dataset.del}); flash(r.message||"삭제했습니다"); await load(true); }

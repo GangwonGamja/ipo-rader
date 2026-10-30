@@ -616,6 +616,17 @@ class TestServer(unittest.TestCase):
         code, raw = post("/admin/macro-manual", json.dumps({"delete": "us.10y"}), ack)  # 자동 수집 시리즈는 못 지움
         self.assertEqual(code, 400)
         self.assertEqual(post("/admin/macro-refresh", "{}", ack)[0], 202)
+        kb = json.dumps({"name": "ECOS_API_KEY", "key": "TestEcosKey1234"})
+        self.assertEqual(post("/admin/macro-key", kb, vck)[0], 403)
+        code, raw = post("/admin/macro-key", kb, ack)
+        res = json.loads(raw)
+        self.assertEqual(code, 200)
+        self.assertTrue(res["refresh_started"])
+        self.assertNotIn("TestEcosKey1234", raw.decode())
+        self.assertEqual({k["name"]: k["tail"] for k in res["keys"]}["ECOS_API_KEY"], "1234")
+        self.assertNotIn("keys", json.loads(self.req("/api/macro", cookie=vck)[1]))     # 이용자에게 키 정보 없음
+        self.assertTrue(json.loads(self.req("/api/macro", cookie=ack)[1])["status"]["ecos"]["key_set"])
+        self.assertEqual(post("/admin/macro-key", json.dumps({"name": "ECOS_API_KEY", "key": "x y"}), ack)[0], 400)
 
     def test_codes_from_env_and_validation(self):
         import os
@@ -914,6 +925,9 @@ class TestMacro(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.conn = connect(self.tmp / "m.sqlite3")
         self._env = {k: os.environ.get(k) for k in ("FRED_API_KEY", "ECOS_API_KEY", "IPO_RADAR_AI_PRICE_IN", "IPO_RADAR_AI_PRICE_OUT")}
+        from ipo_radar import db as db_mod
+        self.addCleanup(setattr, db_mod, "DB_PATH", db_mod.DB_PATH)
+        db_mod.DB_PATH = self.tmp / "m.sqlite3"  # 화면 입력 키 파일도 임시 폴더에
 
     def tearDown(self):
         import os
@@ -965,6 +979,32 @@ class TestMacro(unittest.TestCase):
         seen.clear()
         macro.collect(self.conn, today=date(2026, 10, 30))
         self.assertTrue(any("observation_start=2026-09-14" in u for u in seen if "DGS10" in u))
+
+    def test_dashboard_key_overrides_env_and_is_masked(self):
+        import os
+        from ipo_radar import macro
+        os.environ["ECOS_API_KEY"] = "envkey11111"
+        bad = macro.set_key("ECOS_API_KEY", "has space key")
+        self.assertFalse(bad["ok"])
+        self.assertFalse(macro.set_key("DART_API_KEY", "abcdefgh1234")["ok"])   # 허용된 키만
+        synced = []
+        res = macro.set_key("ECOS_API_KEY", " DashKey987654 ", sync=lambda v: synced.append(v) or (True, "ok"))
+        self.assertTrue(res["ok"])
+        self.assertEqual(synced, ["DashKey987654"])
+        self.assertEqual(macro.get_key("ECOS_API_KEY"), "DashKey987654")
+        self.assertEqual(oct(macro.key_file().stat().st_mode & 0o777), "0o600")
+        info = {k["name"]: k for k in macro.key_info()}["ECOS_API_KEY"]
+        self.assertEqual((info["set"], info["tail"], info["source"]), (True, "7654", "dashboard"))
+        self.assertNotIn("DashKey987654", json.dumps(macro.key_info()))
+        self.assertEqual(macro._mask("url/DashKey987654/json"), "url/****/json")
+        seen = []
+        http.set_transport(lambda u, h, d=None: seen.append(u) or (200, json.dumps(
+            {"RESULT": {"CODE": "INFO-200", "MESSAGE": "없음"}}).encode()), sleep=lambda s: None)
+        os.environ.pop("FRED_API_KEY", None)
+        macro.collect(self.conn, today=date(2026, 10, 30))
+        self.assertTrue(any("/DashKey987654/" in u for u in seen if "ecos" in u))
+        macro.set_key("ECOS_API_KEY", None)
+        self.assertEqual(macro.get_key("ECOS_API_KEY"), "envkey11111")             # 지우면 환경변수 값으로
 
     def test_missing_keys_marked_not_configured(self):
         import os

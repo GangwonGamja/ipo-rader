@@ -99,12 +99,75 @@ def ensure(conn):
     conn.executescript(DDL)
 
 
+# ---------- API 키: 관리자 화면에서 입력 ----------
+
+KEY_NAMES = ("FRED_API_KEY", "ECOS_API_KEY")
+KEY_RE = re.compile(r"^[A-Za-z0-9]{8,100}$")
+
+
+def key_file():
+    from pathlib import Path
+
+    from . import db
+    return Path(db.DB_PATH).parent / "api_keys.json"
+
+
+def _load_keys() -> dict:
+    import json
+    try:
+        return json.loads(key_file().read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def get_key(name: str) -> str:
+    """관리자 화면에서 넣은 키가 있으면 그것을, 없으면 서버 환경변수를 쓴다."""
+    return (_load_keys().get(name) or {}).get("value") or os.environ.get(name, "")
+
+
+def key_info() -> list[dict]:
+    """화면용: 키 값은 끝 4자리만 보낸다."""
+    saved, out = _load_keys(), []
+    for name in KEY_NAMES:
+        rec = saved.get(name) or {}
+        v = rec.get("value") or os.environ.get(name, "")
+        out.append({"name": name, "set": bool(v), "tail": v[-4:] if v else None,
+                    "source": "dashboard" if rec.get("value") else ("env" if os.environ.get(name) else None),
+                    "updated_at": rec.get("updated_at"), "env_set": bool(os.environ.get(name))})
+    return out
+
+
+def set_key(name: str, value: str | None, sync=None) -> dict:
+    """value=None 이면 화면에서 넣은 키를 지운다(서버 환경변수 값이 있으면 그것으로 돌아감)."""
+    import json
+    if name not in KEY_NAMES:
+        return {"ok": False, "message": "바꿀 수 없는 키 이름입니다."}
+    if value is not None:
+        value = value.strip()
+        if not KEY_RE.match(value):
+            return {"ok": False, "message": "키 형식이 맞지 않습니다(영문·숫자 8~100자, 공백 없이)."}
+    keys = _load_keys()
+    if value is None:
+        keys.pop(name, None)
+    else:
+        keys[name] = {"value": value, "updated_at": iso()}
+    f = key_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(f), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # 서버 계정만 읽기
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(keys, fh)
+    synced, sync_msg = sync(value) if sync else (None, "")
+    label = SOURCES["ecos" if name == "ECOS_API_KEY" else "fred"]["name"]
+    msg = f"{label} 키를 저장했습니다. 바로 수집을 시작합니다." if value is not None else f"{label} 키를 지웠습니다."
+    return {"ok": True, "message": msg, "render_synced": synced, "sync_message": sync_msg}
+
+
 def _mask(msg: str) -> str:
     """오류 메시지에 들어간 API 키를 가린다(키는 URL에 들어간다)."""
-    for name in ("FRED_API_KEY", "ECOS_API_KEY"):
-        v = os.environ.get(name)
-        if v:
-            msg = msg.replace(v, "****")
+    for name in KEY_NAMES:
+        for v in (os.environ.get(name), (_load_keys().get(name) or {}).get("value")):
+            if v:
+                msg = msg.replace(v, "****")
     return re.sub(r"(api_key=)[^&\s]+", r"\1****", msg)
 
 
@@ -188,10 +251,10 @@ def collect(conn, today: date | None = None) -> dict:
     summary = {}
     for src in ("fred", "ecos", "altme"):
         key_name = SOURCES[src]["key"]
-        key = os.environ.get(key_name, "") if key_name else ""
+        key = get_key(key_name) if key_name else ""
         ids = [sid for sid, s in SERIES.items() if s[3] == src]
         if key_name and not key:
-            _status(conn, src, "not_configured", f"{key_name} 미설정 — Render Environment에 키를 넣으면 자동 수집합니다")
+            _status(conn, src, "not_configured", f"{key_name} 미설정 — 매크로 화면(관리자) 'API 키'에서 넣으면 자동 수집합니다")
             summary[src] = "not_configured"
             continue
         n, errs = 0, []
@@ -495,7 +558,7 @@ def build(conn) -> dict:
     for s, meta in SOURCES.items():
         st = status.setdefault(s, {"source": s, "status": "never", "message": "아직 수집하지 않았습니다", "checked_at": None, "points": None})
         st.update(name=meta["name"], key=meta["key"], url=meta["url"],
-                  key_set=bool(os.environ.get(meta["key"])) if meta["key"] else None)
+                  key_set=bool(get_key(meta["key"])) if meta["key"] else None)
     bonds = {k: bond_moves(raw.get(sid, []), yrs) for k, sid, yrs in
              (("us.2y", "us.2y", 2), ("us.10y", "us.10y", 10), ("us.30y", "us.30y", 30),
               ("kr.3y", "kr.3y", 3), ("kr.10y", "kr.10y", 10), ("kr.30y", "kr.30y", 30))}
@@ -503,6 +566,6 @@ def build(conn) -> dict:
     if senti.get("available"):
         senti["history"] = _thin(senti["history"])
     return {"generated_at": iso(), "series": series, "status": status, "bonds": bonds, "sentiment": senti,
-            "usage": usage_summary(conn), "manual_help": MANUAL_HELP,
+            "usage": usage_summary(conn), "manual_help": MANUAL_HELP, "keys": key_info(),
             "refresh": {"running": STATE["running"], "last": STATE["last"], "last_error": STATE["last_error"],
                         "every_hours": REFRESH_HOURS}}
