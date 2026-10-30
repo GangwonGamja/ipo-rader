@@ -7,3 +7,5 @@ dashboard/branch.html
 dashboard/data.json
 dashboard/*.ics
 dashboard/*.csv
+dashboard/*_view.html
+dashboard/data_view.json

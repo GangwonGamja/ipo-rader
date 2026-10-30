@@ -236,21 +236,39 @@ def _render(tpl: str, data: dict) -> str:
     return tpl.replace("/*__IPO_RADAR_DATA__*/null", js.replace("</", "<\\/"))
 
 
+def viewer_data(data: dict) -> dict:
+    """이용자 모드용: 자료원 상태의 오류 내용·실행 단계 기록 등 관리 정보를 뺀 사본."""
+    v = json.loads(json.dumps(data, ensure_ascii=False, default=str))
+    v["meta"]["role"] = "viewer"
+    lr = v["meta"].get("last_run") or {}
+    v["meta"]["last_run"] = {"status": lr.get("status"), "started_at": lr.get("started_at")} if lr else None
+    v["meta"]["last_ok_run"] = None
+    v["sources"] = [{"source": s.get("source"), "status": s.get("status")} for s in v.get("sources", [])]
+    return v
+
+
 def write(conn, now: datetime | None = None, out_dir: Path | str | None = None) -> Path:
+    """관리자용(index.html·branch.html·data.json)과 이용자용(*_view.html·data_view.json)을 함께 만든다."""
     out = Path(out_dir or config.OUTPUT_DIR)
     out.mkdir(parents=True, exist_ok=True)
     data = build_data(conn, now)
     data["meta"]["brand"] = None
+    data["meta"]["role"] = "admin"
+    view = viewer_data(data)
     (out / "data.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+    (out / "data_view.json").write_text(json.dumps(view, ensure_ascii=False, default=str), encoding="utf-8")
     (out / "ipo_calendar.ics").write_text(ics(data), encoding="utf-8")
     tpl = (config.DASHBOARD_DIR / "template.html").read_text(encoding="utf-8")
     (out / "index.html").write_text(_render(tpl, data), encoding="utf-8")
+    (out / "index_view.html").write_text(_render(tpl, view), encoding="utf-8")
     brand = load_brand()
     (out / "ipo_list.csv").write_text(csv_text(data, brand and brand.get("house")), encoding="utf-8")
     if brand:
-        data["meta"]["brand"] = {k: brand.get(k) for k in ("house", "branch", "logo_data")}
+        b = {k: brand.get(k) for k in ("house", "branch", "logo_data")}
+        data["meta"]["brand"] = view["meta"]["brand"] = b
         target = Path(brand.get("output", "dashboard/branch.html"))
         target = target if target.is_absolute() else (out / target.name)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(_render(tpl, data), encoding="utf-8")  # 공유 폴더 절대경로 지정 가능
+        target.with_name(target.stem + "_view.html").write_text(_render(tpl, view), encoding="utf-8")
     return out / "index.html"

@@ -3,12 +3,19 @@
 국내 상장 예정 기업을 매주 자동으로 찾아 정리하는 한국어 대시보드입니다. 일정, 기업별 리서치 보고서, 시장 관심도, 공모가의 상대 수준을 한 화면에서 봅니다.
 외부 라이브러리 없이 Python 3.11 이상 표준 라이브러리만 사용합니다.
 
+## 접속 코드와 모드
+
+- 접속 화면에서 **접속 코드** 하나만 입력합니다. 관리자 코드(`IPO_RADAR_ADMIN_CODE`)는 **관리자 모드**, 이용자 코드(`IPO_RADAR_USER_CODE`)는 **이용자 모드**입니다.
+- 이용자 모드에는 '데이터 관리' 탭, '지금 갱신' 버튼, 자료원 오류 내용, 실행 기록이 없습니다. 서버가 아예 다른 파일(`*_view.html`, `data_view.json`)을 보내므로 화면 조작으로도 볼 수 없습니다.
+- 세션은 서명된 쿠키(HttpOnly·SameSite=Strict·HTTPS에서 Secure)로 12시간 유지됩니다(`IPO_RADAR_SESSION_HOURS`). 코드를 바꾸면 기존 세션이 모두 끊깁니다.
+- 코드를 10회 틀리면 그 IP는 15분간 잠깁니다. 예전 설정 `IPO_RADAR_ADMIN_PASSWORD`도 관리자 코드로 인정합니다.
+
 ## 서버로 운영하기 (권장)
 
 로그인 보호와 주간 자동 갱신을 내장한 웹 서버로 실행합니다.
 
 ```bash
-python -m ipo_radar hash-password 홍길동   # 계정 해시 생성 → .env 의 IPO_RADAR_USERS
+# .env 에 IPO_RADAR_ADMIN_CODE(관리자 코드)와 IPO_RADAR_USER_CODE(이용자 코드) 지정
 docker compose up -d --build               # 또는 python -m ipo_radar serve-prod
 ```
 

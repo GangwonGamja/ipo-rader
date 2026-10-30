@@ -458,90 +458,141 @@ class TestDemand(unittest.TestCase):
 class TestServer(unittest.TestCase):
     def setUp(self):
         import threading
-        import urllib.request
         from http.server import ThreadingHTTPServer
+
         from ipo_radar import server
+        self.server_mod = server
         self.tmp = Path(tempfile.mkdtemp())
-        (self.tmp / "index.html").write_text("<p>dash</p>", encoding="utf-8")
-        (self.tmp / "data.json").write_text(json.dumps({"meta": {"generated_at": "2026-10-30T00:00:00+09:00"}}), encoding="utf-8")
-        spec = f"kim:{server.hash_password('admin-pass-123')}:admin;lee:{server.hash_password('viewer-pass-123')}:viewer"
-        self.app = server.build_app(out_dir=self.tmp, users_spec=spec, anon=False, with_sample=False, trust_proxy=False)
+        (self.tmp / "index.html").write_text("<p>admin-dash</p>", encoding="utf-8")
+        (self.tmp / "index_view.html").write_text("<p>viewer-dash</p>", encoding="utf-8")
+        meta = {"meta": {"generated_at": "2026-10-30T00:00:00+09:00"}}
+        (self.tmp / "data.json").write_text(json.dumps({**meta, "sources": [{"source": "dart", "last_error": "secret-err"}]}), encoding="utf-8")
+        (self.tmp / "data_view.json").write_text(json.dumps({**meta, "sources": [{"source": "dart"}]}), encoding="utf-8")
+        codes = [{"role": "admin", "secret": "admin-code-1"}, {"role": "viewer", "secret": server.hash_password("team-0915")}]
+        self.app = server.build_app(out_dir=self.tmp, codes=codes, anon=False, with_sample=False, trust_proxy=False)
         self.app["index"] = "index.html"
         self.app["runner"].run_async = lambda trigger: True  # 실제 수집은 하지 않음
         self.srv = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(self.app))
         threading.Thread(target=self.srv.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.srv.server_address[1]}"
-        self.urlreq = urllib.request
 
     def tearDown(self):
         self.srv.shutdown()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def req(self, path, user=None, pw=None, method="GET", headers=None):
-        import base64
-        import urllib.error
-        r = self.urlreq.Request(self.base + path, method=method, headers=headers or {}, data=b"" if method == "POST" else None)
-        if user:
-            r.add_header("Authorization", "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode())
-        opener = self.urlreq.build_opener(self.urlreq.ProxyHandler({}))
-        try:
-            with opener.open(r, timeout=5) as resp:
-                return resp.status, resp.read(), dict(resp.headers)
-        except urllib.error.HTTPError as e:
-            return e.code, e.read(), dict(e.headers)
+    def req(self, path, method="GET", data=None, cookie=None, headers=None):
+        import http.client
+        conn = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+        h = dict(headers or {})
+        if cookie:
+            h["Cookie"] = cookie
+        body = None
+        if data is not None:
+            from urllib.parse import urlencode
+            body = urlencode(data)
+            h["Content-Type"] = "application/x-www-form-urlencoded"
+        conn.request(method, path, body=body, headers=h)
+        r = conn.getresponse()
+        out = (r.status, r.read(), {k.lower(): v for k, v in r.getheaders()})
+        conn.close()
+        return out
 
-    def test_auth_and_routes(self):
+    def login(self, code):
+        code_, _, h = self.req("/login", "POST", {"code": code})
+        ck = h.get("set-cookie", "")
+        return code_, h.get("location"), ck.split(";")[0] if ck else None
+
+    def test_redirect_to_login_and_login_page(self):
         self.assertEqual(self.req("/healthz")[0], 200)
         code, _, h = self.req("/")
-        self.assertEqual(code, 401)
-        self.assertIn("Basic", h.get("WWW-Authenticate", ""))
-        self.assertEqual(self.req("/", "lee", "wrong")[0], 401)
-        code, body, h = self.req("/", "lee", "viewer-pass-123")
-        self.assertEqual((code, body), (200, b"<p>dash</p>"))
-        self.assertEqual(h.get("X-Frame-Options"), "DENY")
-        for bad in ("/ipo_radar.sqlite3", "/../data/brand.json", "/template.html"):
-            self.assertEqual(self.req(bad, "lee", "viewer-pass-123")[0], 404, bad)
-        st = json.loads(self.req("/api/status", "lee", "viewer-pass-123")[1])
-        self.assertEqual((st["role"], st["generated_at"]), ("viewer", "2026-10-30T00:00:00+09:00"))
+        self.assertEqual((code, h.get("location")), (303, "/login"))
+        self.assertNotIn("www-authenticate", h)  # 브라우저 기본 로그인 팝업을 띄우지 않음
+        code, body, _ = self.req("/login")
+        self.assertEqual(code, 200)
+        self.assertIn("접속 코드", body.decode())
+        self.assertEqual(self.req("/api/status")[0], 401)
+
+    def test_codes_select_mode_and_viewer_gets_stripped_files(self):
+        code, loc, ck = self.login("team-0915")
+        self.assertEqual((code, loc), (303, "/"))
+        self.assertIn("HttpOnly", self.req("/login", "POST", {"code": "team-0915"})[2]["set-cookie"])
+        self.assertEqual(self.req("/", cookie=ck)[1], b"<p>viewer-dash</p>")
+        self.assertNotIn(b"secret-err", self.req("/data.json", cookie=ck)[1])
+        st = json.loads(self.req("/api/status", cookie=ck)[1])
+        self.assertEqual(st["role"], "viewer")
+        self.assertNotIn("last_error", st)
+        _, _, ack = self.login("admin-code-1")
+        self.assertEqual(self.req("/", cookie=ack)[1], b"<p>admin-dash</p>")
+        self.assertIn(b"secret-err", self.req("/data.json", cookie=ack)[1])
+        self.assertEqual(json.loads(self.req("/api/status", cookie=ack)[1])["role"], "admin")
+
+    def test_wrong_code_tampered_and_expired_cookie(self):
+        code, loc, ck = self.login("nope")
+        self.assertEqual((code, loc, ck), (303, "/login?e=1", None))
+        _, _, vck = self.login("team-0915")
+        name, val = vck.split("=", 1)
+        payload, sig = val.split(".")
+        forged = self.server_mod._b64(b"admin|9999999999") + "." + sig  # 역할을 바꿔 위조
+        self.assertEqual(self.req("/", cookie=f"{name}={forged}")[0], 303)
+        old = self.server_mod.make_token(self.app, "admin", now=time_mod().time() - 13 * 3600)
+        self.assertEqual(self.req("/", cookie=f"{name}={old}")[0], 303)
+        self.assertEqual(self.req("/logout")[2]["location"], "/login")
+
+    def test_refresh_requires_admin_and_header(self):
+        H = {"X-Requested-With": "ipo-radar"}
+        _, _, vck = self.login("team-0915")
+        _, _, ack = self.login("admin-code-1")
+        self.assertEqual(self.req("/admin/refresh", "POST", cookie=vck, headers=H)[0], 403)
+        self.assertEqual(self.req("/admin/refresh", "POST", cookie=ack)[0], 400)
+        self.assertEqual(self.req("/admin/refresh", "POST", cookie=ack, headers=H)[0], 202)
 
     def test_preparing_page_shows_progress_and_error(self):
         (self.tmp / "index.html").unlink()
         from ipo_radar import pipeline
+        _, _, ack = self.login("admin-code-1")
         self.app["runner"].state.update(running=True)
         pipeline.PROGRESS.update(stage="dart", since="2026-10-30T09:00:00+09:00", run_id="x")
-        code, body, h = self.req("/", "lee", "viewer-pass-123")
+        code, body, _ = self.req("/", cookie=ack)
         self.assertEqual(code, 503)
         self.assertIn("DART 공시 확인", body.decode())
-        self.assertIn("refresh", body.decode())
         self.app["runner"].state.update(running=False, last_error="RuntimeError: boom")
         pipeline.PROGRESS.update(stage=None)
-        body = self.req("/", "lee", "viewer-pass-123")[1].decode()
-        self.assertIn("boom", body)
+        self.assertIn("boom", self.req("/", cookie=ack)[1].decode())
 
-    def test_refresh_requires_admin_and_header(self):
-        H = {"X-Requested-With": "ipo-radar"}
-        self.assertEqual(self.req("/admin/refresh", "lee", "viewer-pass-123", "POST", H)[0], 403)
-        self.assertEqual(self.req("/admin/refresh", "kim", "admin-pass-123", "POST")[0], 400)
-        self.assertEqual(self.req("/admin/refresh", "kim", "admin-pass-123", "POST", H)[0], 202)
-
-    def test_admin_from_env(self):
-        from ipo_radar import config, server
-        old = (config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS)
+    def test_codes_from_env_and_validation(self):
+        import os
+        server = self.server_mod
+        keys = ("IPO_RADAR_ADMIN_CODE", "IPO_RADAR_USER_CODE")
+        saved = {k: os.environ.get(k) for k in keys}
+        old_pw, old_users = config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS
         try:
-            config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS = "boss", "long-enough-pw", ""
-            app = server.build_app(out_dir=self.tmp, anon=False, with_sample=False, trust_proxy=False)
-            self.assertEqual(app["users"]["boss"]["role"], "admin")
-            self.assertTrue(server.verify_password("long-enough-pw", app["users"]["boss"]["hash"]))
-            config.SERVER_ADMIN_PASSWORD = "short"
-            with self.assertRaises(SystemExit):
-                server.build_app(out_dir=self.tmp, anon=False, with_sample=False, trust_proxy=False)
+            config.SERVER_USERS = ""
+            os.environ["IPO_RADAR_ADMIN_CODE"], os.environ["IPO_RADAR_USER_CODE"] = "boss-code-77", "team77"
+            roles = {c["role"] for c in server._codes_from_env()}
+            self.assertEqual(roles, {"admin", "viewer"})
+            os.environ.pop("IPO_RADAR_ADMIN_CODE")
+            config.SERVER_ADMIN_PASSWORD = "legacy-admin-pw"  # 예전 관리자 비밀번호는 관리자 코드로 인정
+            self.assertIn({"role": "admin", "secret": "legacy-admin-pw"}, server._codes_from_env())
+            with self.assertRaises(SystemExit):  # 너무 짧은 코드
+                server.build_app(out_dir=self.tmp, codes=[{"role": "admin", "secret": "short"}], anon=False)
+            with self.assertRaises(SystemExit):  # 관리자·이용자 코드가 같음
+                server.build_app(out_dir=self.tmp, codes=[{"role": "admin", "secret": "same-code-1"},
+                                                          {"role": "viewer", "secret": "same-code-1"}], anon=False)
         finally:
-            config.SERVER_ADMIN_USER, config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS = old
+            config.SERVER_ADMIN_PASSWORD, config.SERVER_USERS = old_pw, old_users
+            for k, v in saved.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
 
     def test_lockout(self):
         for _ in range(10):
-            self.req("/", "kim", "bad")
-        self.assertEqual(self.req("/", "kim", "admin-pass-123")[0], 429)
+            self.login("bad-code")
+        code, body, _ = self.req("/login", "POST", {"code": "admin-code-1"})
+        self.assertEqual(code, 429)
+
+
+def time_mod():
+    import time
+    return time
 
 
 class FakeBackend:

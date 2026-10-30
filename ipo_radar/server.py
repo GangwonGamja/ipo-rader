@@ -2,10 +2,11 @@
 
     python -m ipo_radar serve-prod        # 운영 서버 (기본 0.0.0.0:8080)
 
-- 인증: HTTP Basic(반드시 HTTPS 뒤에서 사용). 사용자·비밀번호 해시는 환경변수 IPO_RADAR_USERS.
-  로그인 10회 실패한 IP는 15분간 차단.
-- 제공 경로(허용 목록만): /  /data.json  /ipo_calendar.ics  /ipo_list.csv  /api/status  /healthz
-  POST /admin/refresh (admin 역할만)
+- 접속: /login 화면에서 '접속 코드' 입력. IPO_RADAR_ADMIN_CODE → 관리자 모드, IPO_RADAR_USER_CODE → 이용자 모드.
+  서명된 세션 쿠키(HttpOnly·SameSite=Strict·HTTPS면 Secure, 기본 12시간). 코드 10회 실패한 IP는 15분간 차단.
+- 이용자 모드에는 자료원 상태·오류·실행 기록을 뺀 별도 화면(*_view.html, data_view.json)을 보낸다.
+- 제공 경로(허용 목록만): /  /login  /logout  /data.json  /ipo_calendar.ics  /ipo_list.csv  /api/status  /healthz
+  POST /login, POST /admin/refresh (관리자만)
 - 스케줄러: 매주 월 08:00 KST 실행, 전체 실패 시 30분 간격 최대 3회 재시도.
   서버가 꺼져 있어 지난 실행을 놓쳤으면(마지막 성공이 7일 넘게 지남) 시작 직후 실행.
 - 같은 수집이 동시에 두 번 돌지 않도록 프로세스 내 잠금 + 파일 잠금.
@@ -159,15 +160,97 @@ def log(msg: str):
     print(f"[{iso()}] {msg}", flush=True)
 
 
+# ---------- 접속 코드·세션 ----------
+
+SESSION_COOKIE = "ipo_session"
+SESSION_HOURS = int(os.environ.get("IPO_RADAR_SESSION_HOURS", "12"))
+
+
+def _b64(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).decode().rstrip("=")
+
+
+def _unb64(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def make_token(app, role: str, now: float | None = None) -> str:
+    exp = int((now or time.time()) + SESSION_HOURS * 3600)
+    payload = f"{role}|{exp}".encode()
+    sig = hmac.new(app["key"], payload, hashlib.sha256).hexdigest()
+    return f"{_b64(payload)}.{sig}"
+
+
+def read_token(app, token: str | None, now: float | None = None) -> str | None:
+    """서명이 맞고 만료되지 않았으면 역할(admin/viewer) 반환."""
+    try:
+        p, sig = (token or "").split(".", 1)
+        payload = _unb64(p)
+        if not hmac.compare_digest(hmac.new(app["key"], payload, hashlib.sha256).hexdigest(), sig):
+            return None
+        role, exp = payload.decode().split("|")
+        if int(exp) < (now or time.time()) or role not in ("admin", "viewer"):
+            return None
+        return role
+    except Exception:
+        return None
+
+
+def check_code(app, code: str) -> str | None:
+    """접속 코드 → 역할. 관리자 코드를 먼저 확인."""
+    code = (code or "").strip()
+    if not code:
+        return None
+    for c in app["codes"]:
+        secret = c["secret"]
+        ok = verify_password(code, secret) if secret.startswith("pbkdf2_sha256$") else \
+            hmac.compare_digest(code.encode("utf-8"), secret.encode("utf-8"))
+        if ok:
+            return c["role"]
+    return None
+
+
+def view_name(index: str) -> str:
+    return index[:-5] + "_view.html" if index.endswith(".html") else index + "_view"
+
+
 # ---------- HTTP ----------
 
-STATIC = {
-    "/data.json": ("data.json", "application/json; charset=utf-8"),
-    "/ipo_calendar.ics": ("ipo_calendar.ics", "text/calendar; charset=utf-8"),
-    "/ipo_list.csv": ("ipo_list.csv", "text/csv; charset=utf-8"),
-}
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
        "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+
+def login_page(app, error: str = "") -> str:
+    import html
+    b = app.get("brand") or {}
+    logo = f"<img src='{b['logo_data']}' alt='' style='height:28px'>" if b.get("logo_data") else "<b style='font-size:20px;color:#692c00'>IPO Radar</b>"
+    branch = html.escape(b.get("branch") or "공모주 상담 데스크")
+    err = f"<p class='err'>{html.escape(error)}</p>" if error else ""
+    return f"""<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IPO Radar 접속</title>
+<style>
+:root{{--ink:#231815;--sub:#8a7c72;--line:#e4ddd5;--brand:#692c00;--bg:#f6f4f1}}
+*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);
+font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;padding:16px}}
+.card{{width:min(380px,100%);background:#fff;border:1px solid var(--line);border-top:4px solid var(--brand);border-radius:6px;padding:28px 24px;display:grid;gap:16px}}
+.id{{display:flex;align-items:center;gap:12px;flex-wrap:wrap}}.id .br{{font-weight:800;font-size:18px}}
+h1{{font-size:16px;margin:0}}p{{margin:0;font-size:13px;color:var(--sub);line-height:1.6}}
+label{{font-size:13px;font-weight:700;display:grid;gap:6px}}
+input{{font:inherit;font-size:16px;padding:10px 12px;border:1px solid #cfc4b8;border-radius:4px;letter-spacing:.1em}}
+input:focus{{outline:2px solid #b8873f;outline-offset:1px}}
+button{{font:inherit;font-weight:700;padding:11px;border:0;border-radius:4px;background:var(--brand);color:#fff;cursor:pointer}}
+.err{{color:#b3261e;font-weight:500}}
+</style>
+<div class="card">
+  <div class="id">{logo}<span class="br">{branch}</span></div>
+  <h1>공모주 상담 데스크 접속</h1>
+  <p>부서에서 받은 접속 코드를 입력하세요. 관리자 코드를 입력하면 관리자 모드로 들어갑니다.</p>
+  {err}
+  <form method="post" action="/login" autocomplete="off">
+    <label>접속 코드<input type="password" name="code" required autofocus inputmode="text"></label>
+    <div style="height:12px"></div><button type="submit" style="width:100%">입장</button>
+  </form>
+</div></html>"""
 
 
 def make_handler(app):
@@ -182,6 +265,9 @@ def make_handler(app):
             return (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip() \
                 if app["trust_proxy"] else self.client_address[0]
 
+        def _https(self):
+            return app["trust_proxy"] and self.headers.get("X-Forwarded-Proto", "").lower() == "https"
+
         def _send(self, code, body: bytes, ctype="text/plain; charset=utf-8", extra=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
@@ -192,31 +278,37 @@ def make_handler(app):
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", CSP)
             for k, v in (extra or {}).items():
-                self.send_header(k, v)
+                if isinstance(v, list):
+                    for x in v:
+                        self.send_header(k, x)
+                else:
+                    self.send_header(k, v)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def _auth(self):
+        def _redirect(self, to, cookie=None):
+            self._send(303, b"", extra={"Location": to, **({"Set-Cookie": cookie} if cookie else {})})
+
+        def _cookie(self, value, max_age):
+            c = f"{SESSION_COOKIE}={value}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}"
+            return c + ("; Secure" if self._https() else "")
+
+        def _role(self):
             if app["anon"]:
-                return {"name": "anonymous", "role": "admin"}
-            ip = self._ip()
-            if app["guard"].blocked(ip):
-                self._send(429, "로그인 실패가 많아 잠시 차단되었습니다. 15분 후 다시 시도하세요.".encode())
-                return None
-            h = self.headers.get("Authorization", "")
-            if h.startswith("Basic "):
-                try:
-                    name, _, pw = base64.b64decode(h[6:]).decode("utf-8").partition(":")
-                except Exception:
-                    name, pw = "", ""
-                u = app["users"].get(name)
-                if u and verify_password(pw, u["hash"]):
-                    app["guard"].ok(ip)
-                    return {"name": name, "role": u["role"]}
-                app["guard"].fail(ip)
-            self._send(401, "로그인이 필요합니다.".encode(), extra={"WWW-Authenticate": 'Basic realm="IPO Radar", charset="UTF-8"'})
-            return None
+                return "admin"
+            from http.cookies import SimpleCookie
+            try:
+                jar = SimpleCookie(self.headers.get("Cookie", ""))
+                tok = jar[SESSION_COOKIE].value if SESSION_COOKIE in jar else None
+            except Exception:
+                tok = None
+            return read_token(app, tok)
+
+        def _need_login(self, path):
+            if path.startswith("/api/") or path.startswith("/admin/") or path.endswith(".json"):
+                return self._send(401, "로그인이 필요합니다.".encode())
+            return self._redirect("/login")
 
         def _file(self, name, ctype):
             p = app["out"] / name
@@ -231,15 +323,28 @@ def make_handler(app):
             path = self.path.split("?")[0]
             if path == "/healthz":
                 return self._send(200, b"ok")
-            user = self._auth()
-            if not user:
-                return
+            if path == "/login":
+                err = "코드가 맞지 않습니다. 다시 입력하세요." if "e=1" in self.path else ""
+                return self._send(200, login_page(app, err).encode("utf-8"), "text/html; charset=utf-8")
+            if path == "/logout":
+                return self._redirect("/login", self._cookie("", 0))
+            role = self._role()
+            if not role:
+                return self._need_login(path)
+            admin = role == "admin"
             if path in ("/", "/index.html"):
-                return self._file(app["index"], "text/html; charset=utf-8")
-            if path in STATIC:
-                return self._file(*STATIC[path])
+                return self._file(app["index"] if admin else view_name(app["index"]), "text/html; charset=utf-8")
+            if path == "/data.json":
+                return self._file("data.json" if admin else "data_view.json", "application/json; charset=utf-8")
+            if path == "/ipo_calendar.ics":
+                return self._file("ipo_calendar.ics", "text/calendar; charset=utf-8")
+            if path == "/ipo_list.csv":
+                return self._file("ipo_list.csv", "text/csv; charset=utf-8")
             if path == "/api/status":
-                body = {"user": user["name"], "role": user["role"], **app["runner"].state}
+                st = app["runner"].state
+                body = {"role": role, "user": "관리자" if admin else "이용자", "running": st["running"], "next": st.get("next")}
+                if admin:
+                    body.update(last=st.get("last"), last_error=st.get("last_error"), started_at=st.get("started_at"))
                 dj = app["out"] / "data.json"
                 if dj.is_file():
                     try:
@@ -251,15 +356,30 @@ def make_handler(app):
 
         def do_POST(self):
             path = self.path.split("?")[0]
-            user = self._auth()
-            if not user:
-                return
+            if path == "/login":
+                ip = self._ip()
+                if app["guard"].blocked(ip):
+                    return self._send(429, login_page(app, "코드 입력 실패가 많아 15분간 잠겼습니다. 잠시 후 다시 시도하세요.").encode("utf-8"),
+                                      "text/html; charset=utf-8")
+                n = int(self.headers.get("Content-Length") or 0)
+                from urllib.parse import parse_qs
+                form = parse_qs(self.rfile.read(min(n, 4096)).decode("utf-8", "replace"))
+                role = check_code(app, (form.get("code") or [""])[0])
+                if not role:
+                    app["guard"].fail(ip)
+                    return self._redirect("/login?e=1")
+                app["guard"].ok(ip)
+                log(f"{ip} {'관리자' if role == 'admin' else '이용자'} 모드 접속")
+                return self._redirect("/", self._cookie(make_token(app, role), SESSION_HOURS * 3600))
+            role = self._role()
+            if not role:
+                return self._need_login(path)
             if path == "/admin/refresh":
-                if user["role"] != "admin":
+                if role != "admin":
                     return self._send(403, "관리자만 수집을 실행할 수 있습니다.".encode())
-                if self.headers.get("X-Requested-With") != "ipo-radar":  # 간단한 CSRF 방지(같은 출처 스크립트만 헤더 지정 가능)
+                if self.headers.get("X-Requested-With") != "ipo-radar":  # CSRF 방지(SameSite 쿠키 + 같은 출처 스크립트 전용 헤더)
                     return self._send(400, b"bad request")
-                started = app["runner"].run_async(f"manual-{user['name']}")
+                started = app["runner"].run_async("manual-admin")
                 return self._send(202 if started else 409, json.dumps(
                     {"started": started, "message": "수집을 시작했습니다" if started else "이미 수집 중입니다"},
                     ensure_ascii=False).encode(), "application/json; charset=utf-8")
@@ -294,22 +414,43 @@ def preparing_page(app) -> str:
             "서버가 잠들어 있다가 깨어난 경우 첫 수집에 1~5분 걸릴 수 있습니다.</p></body>")
 
 
-def build_app(out_dir: Path | None = None, users_spec: str | None = None, anon: bool | None = None,
+def _codes_from_env() -> list[dict]:
+    codes = []
+    admin = os.environ.get("IPO_RADAR_ADMIN_CODE") or config.SERVER_ADMIN_PASSWORD  # 예전 설정(관리자 비밀번호)도 관리자 코드로 인정
+    user = os.environ.get("IPO_RADAR_USER_CODE", "")
+    if admin:
+        codes.append({"role": "admin", "secret": admin})
+    if user:
+        codes.append({"role": "viewer", "secret": user})
+    for name, u in parse_users(config.SERVER_USERS).items():  # 해시로 등록한 코드
+        codes.append({"role": "admin" if u["role"] == "admin" else "viewer", "secret": u["hash"]})
+    return codes
+
+
+def build_app(out_dir: Path | None = None, codes: list[dict] | None = None, anon: bool | None = None,
               with_sample: bool | None = None, trust_proxy: bool | None = None) -> dict:
     out = Path(out_dir or config.OUTPUT_DIR)
-    users = parse_users(config.SERVER_USERS if users_spec is None else users_spec)
-    if users_spec is None and config.SERVER_ADMIN_USER and config.SERVER_ADMIN_PASSWORD:
-        if len(config.SERVER_ADMIN_PASSWORD) < 10:
-            raise SystemExit("IPO_RADAR_ADMIN_PASSWORD는 10자 이상이어야 합니다.")
-        users[config.SERVER_ADMIN_USER] = {"hash": hash_password(config.SERVER_ADMIN_PASSWORD), "role": "admin"}
+    codes = _codes_from_env() if codes is None else codes
     anon = config.SERVER_ALLOW_ANON if anon is None else anon
-    if not users and not anon:
-        raise SystemExit("로그인 계정이 없습니다. IPO_RADAR_ADMIN_USER/IPO_RADAR_ADMIN_PASSWORD 또는 IPO_RADAR_USERS를 설정하세요.")
-    brand = config.DATA_DIR / "brand.json"
-    index = "index.html"
-    if brand.exists() and config.SERVER_BRAND:
-        index = Path(json.loads(brand.read_text(encoding="utf-8")).get("output", "branch.html")).name
-    return {"out": out, "users": users, "anon": anon, "guard": LoginGuard(), "index": index,
+    plain = [c for c in codes if not c["secret"].startswith("pbkdf2_sha256$")]
+    for c in plain:
+        if len(c["secret"]) < (8 if c["role"] == "admin" else 6):
+            raise SystemExit("접속 코드가 너무 짧습니다(관리자 8자 이상, 이용자 6자 이상).")
+    if len({c["secret"] for c in plain}) < len(plain):
+        raise SystemExit("관리자 코드와 이용자 코드는 서로 달라야 합니다.")
+    if not any(c["role"] == "admin" for c in codes) and not anon:
+        raise SystemExit("관리자 코드가 없습니다. IPO_RADAR_ADMIN_CODE(관리자)와 IPO_RADAR_USER_CODE(이용자)를 설정하세요.")
+    key_src = "|".join(sorted(c["secret"] for c in codes)) + "|" + os.environ.get("IPO_RADAR_SECRET", "")
+    key = hashlib.sha256(("ipo-radar-session|" + key_src).encode("utf-8")).digest()
+    brand_file = config.DATA_DIR / "brand.json"
+    index, brand = "index.html", None
+    if brand_file.exists() and config.SERVER_BRAND:
+        brand = json.loads(brand_file.read_text(encoding="utf-8"))
+        index = Path(brand.get("output", "branch.html")).name
+        logo = config.ROOT / brand.get("logo", "")
+        if brand.get("logo") and logo.is_file():
+            brand["logo_data"] = "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode()
+    return {"out": out, "codes": codes, "key": key, "anon": anon, "guard": LoginGuard(), "index": index, "brand": brand,
             "runner": Runner(out, config.SERVER_WITH_SAMPLE if with_sample is None else with_sample),
             "trust_proxy": os.environ.get("IPO_RADAR_TRUST_PROXY", "1") == "1" if trust_proxy is None else trust_proxy}
 
@@ -319,5 +460,6 @@ def serve(host: str | None = None, port: int | None = None):
     if config.SERVER_SCHEDULER:
         threading.Thread(target=app["runner"].scheduler, daemon=True).start()
     srv = ThreadingHTTPServer((host or config.SERVER_HOST, port or config.SERVER_PORT), make_handler(app))
-    log(f"IPO Radar 서버 시작 http://{srv.server_address[0]}:{srv.server_address[1]} · 사용자 {len(app['users'])}명 · 첫 화면 {app['index']}")
+    roles = sorted({c["role"] for c in app["codes"]})
+    log(f"IPO Radar 서버 시작 http://{srv.server_address[0]}:{srv.server_address[1]} · 접속 코드 {roles} · 첫 화면 {app['index']}")
     srv.serve_forever()

@@ -268,6 +268,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const root = $("#root"), tip = $("#tip"), toast = $("#toast");
 if(!DATA){ root.innerHTML = `<div class="empty gut"><b>데이터가 없습니다</b><span>python -m ipo_radar run 으로 수집을 실행하면 이 화면이 채워집니다.</span></div>`; return; }
 const BRAND = DATA.meta.brand || null;
+const ADMIN = (DATA.meta.role || "admin") !== "viewer";  // 이용자 모드에서는 관리 기능·오류 정보를 숨김
 if(BRAND) document.documentElement.dataset.brand = "1";
 const HOUSE = BRAND ? BRAND.house : null;
 const FRAMED = (()=>{ try{ return window.self!==window.top; }catch(e){ return true; } })();
@@ -379,7 +380,9 @@ function csvFor(list){
   return "﻿" + [h.map(q).join(","), ...lines].join("\r\n");
 }
 
-const TABS = [["home","이번 주"],["list","공모주 목록"],["calendar","청약 캘린더"],["compare","적정가 비교"],["calc","증거금 계산기"],["changes","변경 이력"],["sources","데이터 관리"]];
+const TABS = [["home","이번 주"],["list","공모주 목록"],["calendar","청약 캘린더"],["compare","적정가 비교"],["calc","증거금 계산기"],["changes","변경 이력"]]
+  .concat(ADMIN ? [["sources","데이터 관리 · 관리자"]] : []);
+if(!TABS.some(([k])=>k===S.tab)) S.tab = "home";
 function header(){
   const lr = DATA.meta.last_run;
   const id = BRAND ? `<div class="id">${BRAND.logo_data?`<img src="${BRAND.logo_data}" alt="${esc(BRAND.house)}">`:`<span class="wordmark">${esc(BRAND.house)}</span>`}<span class="div"></span>
@@ -387,7 +390,7 @@ function header(){
     : `<div class="id"><span class="wordmark">IPO Radar</span><span class="div"></span><span class="br" style="font-size:15px">공모주 상담 데스크<span class="svc">국내 상장 예정 기업 · 향후 90일</span></span></div>`;
   return `<header class="hd gut"><div class="in">${id}
     <div class="hmeta"><span>데이터 기준 <b class="num">${esc(ago(DATA.meta.generated_at))}</b> (KST)</span>
-      <span class="chip ${lr&&lr.status==="success"?"good":lr&&lr.status==="failed"?"bad":"warn"}">${esc(lr?({success:"수집 정상",partial:"일부 자료원 미연결",failed:"수집 실패",running:"수집 중"}[lr.status]||lr.status):"기록 없음")}</span>
+      ${ADMIN?`<span class="chip ${lr&&lr.status==="success"?"good":lr&&lr.status==="failed"?"bad":"warn"}">${esc(lr?({success:"수집 정상",partial:"일부 자료원 미연결",failed:"수집 실패",running:"수집 중"}[lr.status]||lr.status):"기록 없음")}</span>`:""}
       <span>자동 갱신: 매주 월 08:00</span>
       <label class="toggle"><input type="checkbox" id="tg-sample" ${S.showSample?"checked":""}> 예시 데이터 보기</label></div></div></header>
   <nav class="nav gut" aria-label="메뉴"><div class="in" role="tablist">${TABS.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div></nav>`;
@@ -396,9 +399,10 @@ function banners(){
   const srcs = DATA.sources, bad = srcs.filter(s=>["error","blocked"].includes(s.status)), nc = srcs.filter(s=>s.status==="not_configured");
   const daysOld = Math.round((new Date(today+"T00:00:00") - new Date(DATA.meta.today+"T00:00:00"))/864e5);
   let h = "";
-  if(daysOld > DATA.meta.stale_days) h += `<div class="banner err"><b>데이터가 ${daysOld}일 지났습니다</b><span>마지막 수집 ${esc(DATA.meta.today)}. ‘데이터 관리’에서 주간 자동 실행 상태를 확인하세요. 일정이 바뀌었을 수 있으니 고객 안내 전에 DART 공시를 확인하세요.</span></div>`;
-  if(bad.length||nc.length) h += `<div class="banner"><b>일부 자료원을 아직 연결하지 못했습니다. 현재 기업 정보는 웹검색 요약 등급(원문 미확인)입니다.</b>
-    <span>고객 안내 전에는 DART 투자설명서로 일정·공모가를 반드시 확인하세요. 수집하지 못한 값은 0이 아니라 ‘산출 불가’·‘판단 유보’로 표시합니다. <button class="linkbtn" data-tab="sources">연결 상태 보기</button></span></div>`;
+  if(daysOld > DATA.meta.stale_days) h += `<div class="banner err"><b>데이터가 ${daysOld}일 지났습니다</b><span>마지막 수집 ${esc(DATA.meta.today)}. ${ADMIN?"‘데이터 관리’에서 주간 자동 실행 상태를 확인하세요. ":""}일정이 바뀌었을 수 있으니 고객 안내 전에 DART 공시를 확인하세요.</span></div>`;
+  if(ADMIN && (bad.length||nc.length)) h += `<div class="banner"><b>일부 자료원을 아직 연결하지 못했습니다.</b>
+    <span>연결되지 않은 자료는 웹검색 요약 등급(원문 미확인)으로 표시합니다. 수집하지 못한 값은 0이 아니라 ‘산출 불가’·‘판단 유보’로 표시합니다. <button class="linkbtn" data-tab="sources">연결 상태 보기</button></span></div>`;
+  if(!ADMIN) h += `<div class="banner"><b>고객 안내 전 확인</b><span>일정·공모가는 DART 투자설명서로 반드시 확인하세요. ‘신뢰도 낮음’ 표시는 원문 확인 전 자료입니다.</span></div>`;
   if(S.showSample) h += `<div class="banner sample"><b>예시 데이터 표시 중</b><span>[예시]로 시작하는 기업은 기능 시연용 가상 데이터입니다. 상단 지표·오늘 할 일·주간 브리핑에는 포함하지 않습니다.</span></div>`;
   return h;
 }
@@ -990,6 +994,7 @@ function aiCompany(c){
   const n = AI[c.uid];
   if(!n){
     if(c.is_sample) return "";
+    if(!ADMIN) return `<section><div class="pr small"><b>AI 요약</b><span class="muted">이 기업의 AI 요약은 아직 준비되지 않았습니다.</span></div></section>`;
     const st = (DATA.sources||[]).find(x=>x.source==="ai_api");
     const msg = !st ? "아직 AI 요약을 만들지 않았습니다. 관리자가 상단의 ‘지금 갱신’을 누르면 생성됩니다(서버 재시작 직후 수집에서는 비용 절감을 위해 건너뜀)."
       : st.status==="not_configured" ? "AI API 키(GEMINI_API_KEY)가 서버에 없습니다. Render ‘Environment’에 키를 넣어 주세요."
@@ -1141,7 +1146,7 @@ function renderServerBar(){
     const sp = document.createElement("span"); sp.id="srvuser"; meta.prepend(sp);
   }
   const u = document.getElementById("srvuser");
-  if(u) u.innerHTML = `<span class="chip line">${esc(SRV.user)} · ${SRV.role==="admin"?"관리자":"열람"}</span>${SRV.role==="admin"?` <button class="btn" id="btn-refresh" ${SRV.running?"disabled":""}>지금 갱신</button>`:""}`;
+  if(u) u.innerHTML = `${SRV.role==="admin"?`<span class="chip house">관리자 모드</span> <button class="btn" id="btn-refresh" ${SRV.running?"disabled":""}>지금 갱신</button>`:`<span class="chip line">이용자 모드</span>`} <a class="btn" href="/logout">로그아웃</a>`;
 }
 document.addEventListener("click", async e=>{
   if(e.target.id!=="btn-refresh") return;

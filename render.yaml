@@ -9,11 +9,9 @@ services:
     region: singapore
     healthCheckPath: /healthz
     envVars:
-      - key: IPO_RADAR_ADMIN_USER      # 관리자 아이디
+      - key: IPO_RADAR_ADMIN_CODE      # 관리자 접속 코드(8자 이상) → 관리자 모드
         sync: false
-      - key: IPO_RADAR_ADMIN_PASSWORD  # 관리자 비밀번호(10자 이상)
-        sync: false
-      - key: IPO_RADAR_USERS           # (선택) 부서원 계정: 이름:해시:viewer;...
+      - key: IPO_RADAR_USER_CODE       # 이용자(부서원) 접속 코드(6자 이상) → 이용자 모드
         sync: false
       - key: IPO_RADAR_BRAND           # 1=건대역지점 화면, 0=로고 없는 일반 화면
         value: "1"
