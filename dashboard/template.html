@@ -279,7 +279,7 @@ const store = { get(k,d){ try{ const v = localStorage.getItem(NS+k); return v==n
 const kstDate = d => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d).map(x=>[x.type,x.value])); return `${p.year}-${p.month}-${p.day}`; };
 const NOW_KST = kstDate(new Date());
 const today = NOW_KST >= DATA.meta.today ? NOW_KST : DATA.meta.today;
-const S = { showSample: store.get("showSample", false), tab: store.get("tab","home"), period: 90, sector:"", stage:"", verdict:"",
+const S = { showSample: store.get("showSample", false), tab: (location.hash==="#sources" && ADMIN) ? "sources" : store.get("tab","home"), period: 90, sector:"", stage:"", verdict:"",
             kind:"general", soon:false, minInterest:"", onlyWatch:false, onlyHouse:false, q:"", sel:new Set(), detail:null,
             calMonth: today.slice(0,7), calView:"month", watch:new Set(store.get("watch", (DATA.watchlist||[]).map(w=>w.uid))),
             calc:{uid:"", price:"", shares:"", rate:"50", ratio:"", minSh:""}, week:0, dtab:"overview" };
@@ -589,9 +589,6 @@ function calTab(){
 function calcTab(){
   const cs = rows().filter(c=>c.price_band||c.price_final);
   const C = S.calc; const c = byUid[C.uid];
-  const price = Number(C.price)||0, sh = Number(C.shares)||0, rate = (Number(C.rate)||0)/100, ratio = Number(C.ratio)||0, minSh = Number(C.minSh)||0;
-  const dep = price*sh*rate, total = price*sh, minDep = price*minSh*rate;
-  const raw = ratio>0 ? sh*0.5/ratio : null, propor = raw!=null ? Math.floor(raw) : null;
   const opts = cs.map(x=>`<option value="${x.uid}" ${x.uid===C.uid?"selected":""}>${esc(x.name)}${isHouse(x)?" (당사 주관)":""}</option>`).join("");
   const priceOpts = c ? [c.price_final!=null?[c.price_final,"확정 공모가"]:null, c.price_band?[c.price_band.low,"희망 하단"]:null, c.price_band?[c.price_band.high,"희망 상단"]:null].filter(Boolean) : [];
   return `<section class="card"><div class="ch"><h2>청약 증거금 계산기</h2><span class="muted small">상담용 가정 계산 · 실제 조건은 투자설명서·청약 안내 확인</span></div><div class="cb">
@@ -604,15 +601,22 @@ function calcTab(){
     <label>균등배정 최소 청약 주수 <input type="number" id="c-min" min="0" step="1" value="${esc(C.minSh)}" placeholder="예: 10"><span class="hint">${c&&c.min_subscription?`공시값 ${c.min_subscription}주`:"투자설명서 확인 필요"}</span></label>
     <label>예상 비례 경쟁률(선택) <input type="number" id="c-ratio" min="0" step="10" value="${esc(C.ratio)}" placeholder="예: 1000"><span class="hint">입력하면 비례 배정 예상 주수를 보여 줍니다. 실제 경쟁률은 청약 마감 후 확정됩니다.</span></label>
   </div>
-  <div class="res">
-    <span class="muted small">필요 청약 증거금</span>
+  <div class="res" id="c-res">${calcRes()}</div></div></div></section>`;
+}
+
+// 결과 칸만 다시 그린다. 입력칸을 다시 그리면 숫자 입력 커서가 맨 앞으로 가서 "100"이 "001"로 들어간다.
+function calcRes(){
+  const C = S.calc; const c = byUid[C.uid];
+  const price = Number(C.price)||0, sh = Number(C.shares)||0, rate = (Number(C.rate)||0)/100, ratio = Number(C.ratio)||0, minSh = Number(C.minSh)||0;
+  const dep = price*sh*rate, total = price*sh, minDep = price*minSh*rate;
+  const raw = ratio>0 ? sh*0.5/ratio : null, propor = raw!=null ? Math.floor(raw) : null;
+  return `    <span class="muted small">필요 청약 증거금</span>
     <span class="big">${price&&sh?won(dep):"–"}</span>
     <div class="row"><span>청약 금액(공모가×주수)</span><b class="num">${price&&sh?won(total):"–"}</b></div>
     <div class="row"><span>균등배정 최소 증거금</span><b class="num">${price&&minSh?won(minDep):"–"}</b></div>
     <div class="row"><span>비례 배정 예상 주수</span><b class="num">${propor!=null&&sh?`${propor.toLocaleString()}주 (계산값 ${raw.toFixed(2)}주)`:"–"}</b></div>
     <span class="small muted">증거금 = 공모가 × 청약 주수 × 증거금률. 비례 배정 예상 = 청약 주수 × 50% ÷ 비례 경쟁률(일반청약 물량의 절반을 비례 배정한다고 가정, 단주 버림). 균등 배정분은 청약자 수에 따라 달라 계산하지 않습니다. 청약 수수료는 포함하지 않았습니다.</span>
-    ${c?`<button class="btn" data-notice="${c.uid}">이 종목 고객 안내문 복사</button>`:""}
-  </div></div></div></section>`;
+    ${c?`<button class="btn" data-notice="${c.uid}">이 종목 고객 안내문 복사</button>`:""}`;
 }
 
 function compareTab(){
@@ -1127,7 +1131,7 @@ document.addEventListener("input", e=>{
   const id = e.target.id;
   if(id==="f-q"){ S.q=e.target.value.trim(); const pos=e.target.selectionStart; renderTab(); const q=$("#f-q"); q.focus(); q.setSelectionRange(pos,pos); return; }
   const cm = {"c-price":"price","c-shares":"shares","c-rate":"rate","c-ratio":"ratio","c-min":"minSh"};
-  if(cm[id]){ S.calc[cm[id]] = e.target.value; renderTab(); const el=$("#"+id); el.focus(); return; }
+  if(cm[id]){ S.calc[cm[id]] = e.target.value; const r=$("#c-res"); if(r) r.innerHTML = calcRes(); return; }
   if(id==="memo"){ store.set("memo:"+e.target.dataset.uid, e.target.value); }
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && S.detail){ S.detail=null; renderDetail(); } });
@@ -1165,7 +1169,7 @@ function renderServerBar(){
     const sp = document.createElement("span"); sp.id="srvuser"; meta.prepend(sp);
   }
   const u = document.getElementById("srvuser");
-  if(u) u.innerHTML = `${SRV.role==="admin"?`<span class="chip house">관리자 모드</span> <button class="btn" id="btn-refresh" ${SRV.running?"disabled":""}>지금 갱신</button>`:`<span class="chip line">이용자 모드</span>`} <a class="btn" href="/logout">로그아웃</a>`;
+  if(u) u.innerHTML = `${SRV.role==="admin"?`<span class="chip house">관리자 모드</span> <button class="btn" id="btn-refresh" ${SRV.running?"disabled":""}>지금 갱신</button>`:`<span class="chip line">이용자 모드</span>`} <a class="btn" href="/">← 메뉴</a> <a class="btn" href="/macro">매크로 분석</a> <a class="btn" href="/logout">로그아웃</a>`;
 }
 async function saveUserCode(body){
   const msg = document.getElementById("uc-msg");

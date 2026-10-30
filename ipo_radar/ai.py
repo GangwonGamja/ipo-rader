@@ -136,7 +136,12 @@ class GeminiBackend:
         txt = getattr(resp, "text", None)
         if not txt:
             raise RuntimeError("Gemini가 빈 응답을 돌려줬습니다(안전 필터 또는 길이 제한)")
-        return json.loads(txt), self.model
+        out = json.loads(txt)
+        um = getattr(resp, "usage_metadata", None)  # 생각(thinking) 토큰도 출력 요금에 포함된다
+        out["_usage"] = _usage(getattr(um, "prompt_token_count", 0),
+                               _int(getattr(um, "candidates_token_count", 0)) + _int(getattr(um, "thoughts_token_count", 0)),
+                               getattr(um, "total_token_count", 0)) if um is not None else None
+        return out, self.model
 
 
 class ClaudeBackend:
@@ -157,7 +162,22 @@ class ClaudeBackend:
         if resp.stop_reason == "max_tokens":
             raise RuntimeError("응답이 길이 제한에서 잘렸습니다")
         text_out = next(b.text for b in resp.content if b.type == "text")
-        return json.loads(text_out), getattr(resp, "model", self.model)
+        out = json.loads(text_out)
+        u = getattr(resp, "usage", None)
+        out["_usage"] = _usage(getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0), None) if u is not None else None
+        return out, getattr(resp, "model", self.model)
+
+
+def _int(v) -> int:
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _usage(i, o, t) -> dict:
+    i, o = _int(i), _int(o)
+    return {"input": i, "output": o, "total": _int(t) or i + o}
 
 
 KEY_NAME = "ANTHROPIC_API_KEY" if PROVIDER == "claude" else "GEMINI_API_KEY"
@@ -234,6 +254,7 @@ def refresh(conn, run, company_reports: dict[str, dict], briefing: dict | None) 
             except Exception as e:  # 한 기업 실패가 전체를 멈추지 않게
                 errors.append(f"{name}: {type(e).__name__}: {e}")
                 continue
+            _track(conn, out, "company")
             conn.execute("""INSERT INTO ai_notes(uid,kind,input_hash,content,model,created_at) VALUES(?,?,?,?,?,?)
                             ON CONFLICT(uid,kind) DO UPDATE SET input_hash=excluded.input_hash, content=excluded.content,
                               model=excluded.model, created_at=excluded.created_at""",
@@ -250,6 +271,7 @@ def refresh(conn, run, company_reports: dict[str, dict], briefing: dict | None) 
                 out = _call(client, payload, WEEKLY_SCHEMA,
                             "아래 이번 주 공모주 일정·변경 자료로 지점 직원용 주간 브리핑을 쓰세요. headline은 한 문장, summary는 3~4문장, "
                             "highlights와 cautions는 각각 4개 이하입니다.")
+                _track(conn, out, "weekly")
                 conn.execute("""INSERT INTO ai_notes(uid,kind,input_hash,content,model,created_at) VALUES(?,?,?,?,?,?)
                                 ON CONFLICT(uid,kind) DO UPDATE SET input_hash=excluded.input_hash, content=excluded.content,
                                   model=excluded.model, created_at=excluded.created_at""",
@@ -258,6 +280,16 @@ def refresh(conn, run, company_reports: dict[str, dict], briefing: dict | None) 
             except Exception as e:
                 errors.append(f"주간 브리핑: {type(e).__name__}: {e}")
     return {"generated": gen, "skipped": skipped, "errors": errors}
+
+
+def _track(conn, out: dict, purpose: str):
+    """호출별 토큰 사용량을 매크로 화면의 '토큰 사용량·비용'용으로 남긴다."""
+    usage = out.pop("_usage", None)
+    try:
+        from . import macro
+        macro.record_usage(conn, PROVIDER, out.get("_model", MODEL), purpose, usage)
+    except Exception:  # noqa: BLE001 — 사용량 기록 실패가 요약 저장을 막지 않게
+        pass
 
 
 def load_notes(conn) -> dict:

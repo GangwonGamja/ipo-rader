@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>매크로 분석</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=Roboto+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f6f4f1; --surface:#ffffff; --surface-2:#f2eeea; --line:#e4ddd5; --line-strong:#cfc4b8;
+  --ink:#231815; --ink-2:#5a4c44; --ink-3:#8a7c72;
+  --brand:#692c00; --brand-2:#8a4a1c; --brand-soft:#f6ebe1; --gold:#b8873f;
+  --good:#1e7a4c; --warn:#a35a00; --bad:#b3261e;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --fear-2:#d95926; --fear-1:#f2a27e; --mid:#d6d2cc; --greed-1:#86b6ef; --greed-2:#256abf;
+  --grid:#ece7e1; --axis:#cfc4b8;
+  --f-num:"Roboto Mono",ui-monospace,Consolas,monospace; --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#141110; --surface:#1d1917; --surface-2:#26201d; --line:#352c27; --line-strong:#4a3e37;
+  --ink:#f1ebe6; --ink-2:#c9bdb4; --ink-3:#998b81; --brand:#8a4a1c; --brand-2:#c9895a; --brand-soft:#33231a; --gold:#d6a65c;
+  --good:#52c08a; --warn:#e5a54d; --bad:#f07f74;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --fear-2:#d95926; --fear-1:#8f4a2c; --mid:#4a423d; --greed-1:#2c5a92; --greed-2:#5598e7;
+  --grid:#2c2521; --axis:#4a3e37;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#141110; --surface:#1d1917; --surface-2:#26201d; --line:#352c27; --line-strong:#4a3e37;
+  --ink:#f1ebe6; --ink-2:#c9bdb4; --ink-3:#998b81; --brand:#8a4a1c; --brand-2:#c9895a; --brand-soft:#33231a; --gold:#d6a65c;
+  --good:#52c08a; --warn:#e5a54d; --bad:#f07f74;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --fear-2:#d95926; --fear-1:#8f4a2c; --mid:#4a423d; --greed-1:#2c5a92; --greed-2:#5598e7;
+  --grid:#2c2521; --axis:#4a3e37;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-size:14px;line-height:1.5}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+header{background:var(--surface);border-bottom:1px solid var(--line);border-top:4px solid var(--brand)}
+.hin{max-width:1200px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap}
+.hin .br{font-weight:800}.hin h1{font-size:16px;margin:0;padding-left:12px;border-left:1px solid var(--line)}
+.sp{flex:1}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:4px;padding:6px 10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.btn:hover{border-color:var(--brand-2)}.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.chip{font-size:12px;border:1px solid var(--line-strong);border-radius:999px;padding:2px 9px;color:var(--ink-2);white-space:nowrap}
+.chip.adm{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.chip.ok{border-color:var(--good);color:var(--good)}.chip.warn{border-color:var(--warn);color:var(--warn)}.chip.bad{border-color:var(--bad);color:var(--bad)}
+main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:4px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;border:0;background:var(--surface);color:var(--ink-2);padding:6px 12px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}.seg button[aria-pressed="true"]{background:var(--brand);color:#fff;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,140px),1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:2px;align-content:start}
+.kpi .lab{font-size:12px;color:var(--ink-2);font-weight:500}
+.kpi .val{font-family:var(--f-num);font-size:24px;font-weight:600;line-height:1.2}
+.kpi .val small{font-size:13px;font-weight:500;color:var(--ink-2);margin-left:2px}
+.kpi .det{font-size:12px;color:var(--ink-2)}
+.banner{border:1px solid var(--line);border-left:4px solid var(--gold);background:var(--surface);border-radius:var(--r);padding:10px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);min-width:0}
+.ch{display:flex;gap:8px 12px;align-items:baseline;flex-wrap:wrap;padding:14px 16px 0}
+.ch h2{font-size:16px;margin:0}.muted{color:var(--ink-2)}.small{font-size:12.5px}
+.cb{padding:12px 16px 16px;display:grid;gap:14px}
+.cb>*,.g2>*{min-width:0}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.panel{display:grid;gap:6px;min-width:0}
+.panel h3{font-size:13.5px;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+svg.chart{width:100%;height:auto;display:block;overflow:visible;touch-action:pan-y}
+svg.chart text{font-size:11px;fill:var(--ink-3);font-family:var(--f-num)}
+svg.chart text.dl{fill:var(--ink-2);font-family:"Noto Sans KR",system-ui,sans-serif;font-size:11px}
+svg.chart .grid{stroke:var(--grid);stroke-width:1}
+svg.chart .axis{stroke:var(--axis);stroke-width:1}
+svg.chart .xh{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3}
+.empty{border:1px dashed var(--line-strong);border-radius:var(--r);padding:22px 16px;text-align:center;color:var(--ink-2);display:grid;gap:4px;font-size:13px}
+.empty b{color:var(--ink)}
+.note{font-size:12.5px;color:var(--ink-2);margin:0;line-height:1.6;overflow-wrap:anywhere}
+details summary{cursor:pointer;font-size:12.5px;color:var(--ink-2)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--ink-2);background:var(--surface-2);white-space:nowrap}
+td.r,th.r{text-align:right}
+.tw{overflow-x:auto}
+.gauge{display:grid;gap:6px}
+.track{position:relative;height:14px;display:grid;grid-template-columns:25fr 20fr 10fr 20fr 25fr;gap:2px}
+.track span{border-radius:3px}
+.track .mk{position:absolute;top:-5px;width:4px;height:24px;background:var(--ink);border-radius:2px;transform:translateX(-2px);box-shadow:0 0 0 2px var(--surface)}
+.scale{display:grid;grid-template-columns:25fr 20fr 10fr 20fr 25fr;font-size:11px;color:var(--ink-3);text-align:center}
+.big{font-family:var(--f-num);font-size:34px;font-weight:600;line-height:1}
+textarea{width:100%;min-height:150px;font-family:var(--f-num);font-size:13px;border:1px solid var(--line-strong);border-radius:4px;padding:8px;background:var(--surface);color:var(--ink)}
+#tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;border-radius:4px;padding:6px 9px;max-width:280px;line-height:1.5}
+#tip i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;background:var(--surface);padding:6px;z-index:30}
+@media (max-width:640px){.hin h1{border-left:0;padding-left:0;width:100%}.kpi .val{font-size:20px}}
+@media print{header .btn,.seg,#tip{display:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">본문으로</a>
+<header><div class="hin" id="hdr"></div></header>
+<main id="main"><div class="empty"><b>매크로 지표를 불러오는 중입니다</b></div></main>
+<div id="tip" hidden></div>
+<script>
+"use strict";
+const BOOT = /*__MACRO_BOOT__*/null || {role:"admin", branch:"", logo:"<b>IPO Radar</b>"};
+const ADMIN = BOOT.role === "admin";
+const store = { get(k,d){ try{ const v=localStorage.getItem("macro:"+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+                set(k,v){ try{ localStorage.setItem("macro:"+k, JSON.stringify(v)); }catch(e){} } };
+const RANGES = [["1m","1개월",31],["3m","3개월",92],["6m","6개월",183],["1y","1년",366],["3y","3년",1100]];
+const COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
+let D = null, RANGE = store.get("range","1y"), POLL = null;
+const CHARTS = [];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DAY = 86400000;
+const t = d => Date.parse(d + "T00:00:00Z");
+
+function dec(unit){ return unit==="원"?1 : unit==="0~100"||unit==="bp"?0 : unit==="지수"?1 : 2; }
+function fmt(v, unit, d){ if(v==null||!isFinite(v)) return "–"; if(Math.abs(v)<1e-9) v = 0; const k = d ?? dec(unit); return Number(v).toLocaleString("ko-KR",{minimumFractionDigits:k, maximumFractionDigits:k}); }
+function sgn(v, k=2){ if(v==null||!isFinite(v)) return "–"; const s = Number(v).toLocaleString("ko-KR",{minimumFractionDigits:k,maximumFractionDigits:k}); return v>0?"+"+s : v<0? s.replace("-","−") : s; }
+function kst(isoStr){ if(!isoStr) return "–"; const d=new Date(isoStr); if(isNaN(d)) return esc(isoStr); return d.toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
+
+function S(id){ return D && D.series[id]; }
+function cutoff(){ const days = (RANGES.find(r=>r[0]===RANGE)||RANGES[3])[2]; return Date.now() - days*DAY; }
+function inRange(points){ const c = cutoff(); return (points||[]).filter(p => t(p[0]) >= c); }
+function valueAt(points, targetMs){ let best=null; for(const p of points){ if(t(p[0])<=targetMs) best=p; else break; } return best; }
+function change(id, days){
+  const s = S(id); if(!s || !s.points.length) return null;
+  const last = s.points[s.points.length-1]; const base = valueAt(s.points, t(last[0]) - days*DAY);
+  return base ? {delta: last[1]-base[1], from: base[0]} : null;
+}
+function seriesByGroup(g){ return Object.values(D.series).filter(s => s.group===g && s.source==="manual" && s.points.length).sort((a,b)=>a.name.localeCompare(b.name,"ko")); }
+
+// ---------- 차트 ----------
+function niceTicks(lo, hi, n=4){
+  if(lo===hi){ lo -= 1; hi += 1; }
+  const span = hi-lo, raw = span/n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1,2,2.5,5,10].map(m=>m*mag).find(s => span/s <= n) || 10*mag;
+  const a = Math.floor(lo/step)*step, b = Math.ceil(hi/step)*step, out=[];
+  for(let v=a; v<=b+step/2; v+=step) out.push(+v.toFixed(10));
+  return out;
+}
+function dateLabel(ms, spanDays){ const d=new Date(ms); const y=d.getUTCFullYear(), m=d.getUTCMonth()+1, dd=d.getUTCDate();
+  return spanDays > 400 ? `${y}.${String(m).padStart(2,"0")}` : spanDays > 60 ? `${String(y).slice(2)}.${String(m).padStart(2,"0")}` : `${m}/${dd}`; }
+
+/* defs: [{name, points:[[date,v]], unit}] — 같은 단위만 한 차트에 그린다(이중 축 금지) */
+function lineChart(defs, opts={}){
+  defs = defs.filter(d => d.points && d.points.length);
+  if(!defs.length) return "";
+  const W=640, H=opts.h||220, L=48, T=10, B=24, labels = defs.length<=4 && opts.direct!==false, R = labels?(defs.length===1?56:100):14;
+  const all = defs.flatMap(d=>d.points);
+  const xs = all.map(p=>t(p[0])), x0=Math.min(...xs), x1=Math.max(...xs, x0+DAY);
+  let lo=Math.min(...all.map(p=>p[1])), hi=Math.max(...all.map(p=>p[1]));
+  if(opts.zero){ lo=Math.min(lo,0); hi=Math.max(hi,0); }
+  const fixedOk = opts.fixed && lo>=opts.fixed[0] && hi<=opts.fixed[1];
+  if(fixedOk){ lo=opts.fixed[0]; hi=opts.fixed[1]; }
+  const ticks = fixedOk ? opts.ticks : niceTicks(lo, hi); const y0=ticks[0], y1=ticks[ticks.length-1];
+  const X = ms => L + (ms-x0)/(x1-x0)*(W-L-R), Y = v => T + (1-(v-y0)/(y1-y0||1))*(H-T-B);
+  const span = (x1-x0)/DAY, nx = 5, xt = Array.from({length:nx}, (_,i)=> x0 + (x1-x0)*i/(nx-1));
+  const unit = defs[0].unit, k = opts.dec ?? dec(unit);
+  const paths = defs.map((d,i)=>{
+    const col = d.color || COLORS[i%4];
+    const dpath = d.points.map((p,j)=>`${j?"L":"M"}${X(t(p[0])).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+    return `<path d="${dpath}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join("");
+  // 선 끝 직접 표기(겹치면 위아래로 벌림)
+  let dl = "";
+  if(labels){
+    const ends = defs.map((d,i)=>{ const p=d.points[d.points.length-1]; const nm = defs.length===1 ? "" : (d.short||d.name); return {i, y:Y(p[1]), x:X(t(p[0])), v:p[1], name: nm.length>9 ? nm.slice(0,8)+"…" : nm, col:d.color||COLORS[i%4]}; }).sort((a,b)=>a.y-b.y);
+    for(let j=1;j<ends.length;j++) if(ends[j].y-ends[j-1].y<14) ends[j].y = ends[j-1].y+14;
+    dl = ends.map(e=>`<circle cx="${e.x.toFixed(1)}" cy="${Y(defs[e.i].points[defs[e.i].points.length-1][1]).toFixed(1)}" r="4" fill="${e.col}" stroke="var(--surface)" stroke-width="2"/>
+      <text class="dl" x="${(e.x+8).toFixed(1)}" y="${(e.y+4).toFixed(1)}">${esc(e.name)}${e.name?" ":""}${fmt(e.v,unit,k)}</text>`).join("");
+  }
+  const id = CHARTS.length;
+  const dates = [...new Set(all.map(p=>p[0]))].sort();
+  CHARTS.push({id, defs, X, Y, L, R, W, H, T, B, dates, unit, k, x0, x1});
+  const legend = defs.length>=2 ? `<div class="legend">${defs.map((d,i)=>`<span><i style="background:${d.color||COLORS[i%4]}"></i>${esc(d.name)}</span>`).join("")}</div>` : "";
+  const aria = `${defs.map(d=>d.name).join(", ")} 추이 그래프`;
+  const tbl = `<details><summary>최근 값 표로 보기</summary><div class="tw"><table><thead><tr><th>날짜</th>${defs.map(d=>`<th class="r">${esc(d.short||d.name)}</th>`).join("")}</tr></thead><tbody>${
+    dates.slice(-10).reverse().map(dt=>`<tr><td class="num">${dt}</td>${defs.map(d=>{ const p=d.points.find(q=>q[0]===dt); return `<td class="r num">${p?fmt(p[1],unit,k):"–"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></details>`;
+  return `${legend}<svg class="chart" data-chart="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}">
+    ${ticks.map(v=>`<line class="${v===0&&opts.zero?"axis":"grid"}" x1="${L}" x2="${W-R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${L-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${fmt(v,unit,Math.min(k, Math.abs(ticks[1]-ticks[0])<1?2:0))}</text>`).join("")}
+    ${opts.bands||""}
+    <line class="axis" x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}"/>
+    ${xt.map((v,i)=>`<text x="${X(v).toFixed(1)}" y="${H-6}" text-anchor="${i===0?"start":i===nx-1?"end":"middle"}">${dateLabel(v,span)}</text>`).join("")}
+    ${paths}${dl}
+    <line class="xh" x1="0" x2="0" y1="${T}" y2="${H-B}" visibility="hidden"/>
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent"/>
+  </svg>${opts.table===false?"":tbl}`;
+}
+
+function barChart(rows){
+  if(!rows.length) return "";
+  const W=1100,H=240,L=56,R=14,T=10,B=24;
+  const max = Math.max(...rows.map(r=>r.input+r.output), 1), ticks = niceTicks(0, max), top = ticks[ticks.length-1];
+  const bw = Math.max(2, (W-L-R)/rows.length - 2);
+  const X = i => L + i*((W-L-R)/rows.length) + 1, Y = v => T + (1 - v/top)*(H-T-B);
+  const bars = rows.map((r,i)=>{
+    const yi = Y(r.input), yo = Y(r.input + r.output);
+    const tip = `${r.date}|입력 ${r.input.toLocaleString()} 토큰|출력 ${r.output.toLocaleString()} 토큰|호출 ${r.calls}회${r.cost_usd!=null?`|비용 $${r.cost_usd}`:""}`;
+    return `<g data-tip="${esc(tip)}"><rect x="${X(i)}" y="${T}" width="${bw}" height="${H-T-B}" fill="transparent"/>
+      <rect x="${X(i)}" y="${yi}" width="${bw}" height="${Math.max(0,H-B-yi)}" fill="var(--s1)" rx="2"/>
+      ${r.output?`<rect x="${X(i)}" y="${yo}" width="${bw}" height="${Math.max(0,yi-yo-2)}" fill="var(--s2)" rx="2"/>`:""}</g>`;
+  }).join("");
+  const step = Math.ceil(rows.length/6);
+  return `<div class="legend"><span><i style="background:var(--s1)"></i>입력 토큰</span><span><i style="background:var(--s2)"></i>출력 토큰(생각 토큰 포함)</span></div>
+  <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="일별 AI 토큰 사용량 막대 그래프">
+    ${ticks.map(v=>`<line class="grid" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(0)+"K":v}</text>`).join("")}
+    <line class="axis" x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}"/>
+    ${rows.map((r,i)=> i%step===0 ? `<text x="${X(i)+bw/2}" y="${H-6}" text-anchor="middle">${r.date.slice(5).replace("-","/")}</text>` : "").join("")}
+    ${bars}</svg>`;
+}
+
+function empty(title, why){ return `<div class="empty"><b>${esc(title)}</b><span>${why}</span></div>`; }
+function needWhy(source){
+  const st = D.status[source] || {};
+  if(source==="manual") return "무료 공개 API가 없는 자료라 관리자가 값을 입력하면 그래프로 표시됩니다.";
+  if(st.status==="not_configured") return `${esc(st.key)}를 서버 환경변수에 넣으면 자동 수집됩니다.`;
+  if(st.status==="never") return "아직 수집하지 않았습니다. 첫 수집이 끝나면 표시됩니다.";
+  return "자료를 받지 못했습니다" + (ADMIN && st.message ? ` — ${esc(st.message)}` : "") + ".";
+}
+function panel(title, ids, opts={}){
+  const defs = ids.map(id=>S(id)).filter(Boolean).map((s,i)=>({name:s.name, short:opts.short?opts.short[i]:null, unit:s.unit, points:inRange(s.points)}));
+  const has = defs.some(d=>d.points.length);
+  const first = S(ids[0]);
+  const lastDate = defs.map(d=>d.points.length?d.points[d.points.length-1][0]:null).filter(Boolean).sort().pop();
+  return `<div class="panel"><h3>${esc(title)} <span class="muted small">${first?esc(first.unit):""}${lastDate?` · ${lastDate} 기준`:""}</span></h3>
+    ${has ? lineChart(defs, opts) : empty("자료 없음", needWhy(first?first.source:"fred"))}
+    ${opts.note?`<p class="note">${opts.note}</p>`:""}</div>`;
+}
+const GROUP_PREFIX = {sentiment:"fng"};
+function manualPanel(group, title, note){
+  const ss = seriesByGroup(group);
+  if(!ss.length) return `<div class="panel"><h3>${esc(title)}</h3>${empty("관리자 입력 자료 없음", needWhy("manual") + ` 입력 형식: <span class="num">${esc((D.manual_help||{})[GROUP_PREFIX[group]||group]||"")}</span>`)}<p class="note">${note}</p></div>`;
+  const shown = ss.slice(0,4);
+  const defs = shown.map(s=>({name:s.name, unit:s.unit, points:inRange(s.points)}));
+  const rest = ss.slice(4);
+  const latest = `<div class="tw"><table><thead><tr><th>항목</th><th class="r">최근 값</th><th>날짜</th><th class="r">1주 변화</th><th class="r">1개월 변화</th></tr></thead><tbody>${
+    ss.map(s=>{ const w=change(s.id,7), m=change(s.id,30); return `<tr><td>${esc(s.name)}</td><td class="r num">${fmt(s.last[1],"",2)}</td><td class="num">${s.last[0]}</td><td class="r num">${w?sgn(w.delta):"–"}</td><td class="r num">${m?sgn(m.delta):"–"}</td></tr>`; }).join("")}</tbody></table></div>`;
+  const anyInRange = defs.some(d=>d.points.length);
+  return `<div class="panel"><h3>${esc(title)} <span class="muted small">관리자 입력</span></h3>
+    ${anyInRange ? lineChart(defs, {table:false}) : empty("선택한 기간에 값이 없습니다","기간을 늘려 보세요.")}
+    ${rest.length?`<p class="note">그래프는 앞의 4개 항목만 그립니다(색 구분 한계). 나머지 ${rest.length}개는 아래 표에서 보세요.</p>`:""}
+    ${latest}<p class="note">${note}</p></div>`;
+}
+
+// ---------- 화면 ----------
+function kpi(label, id, opts={}){
+  const s = S(id);
+  if(!s || !s.last) return `<div class="kpi"><span class="lab">${esc(label)}</span><span class="val">–</span><span class="det">${s&&s.source==="ecos"?"ECOS 키 필요":s&&s.source==="fred"?"FRED 키 필요":"자료 없음"}</span></div>`;
+  const w = change(id, 7), k = opts.dec ?? dec(s.unit);
+  const dtxt = w ? (opts.bp ? `1주 ${sgn(w.delta*100,0)}bp` : `1주 ${sgn(w.delta, k)}`) : "1주 변화 –";
+  return `<div class="kpi"><span class="lab">${esc(label)}</span><span class="val">${fmt(s.last[1], s.unit, k)}<small>${esc(opts.unit ?? s.unit)}</small></span><span class="det">${dtxt} · ${s.last[0]}</span></div>`;
+}
+function header(){
+  $("#hdr").innerHTML = `${BOOT.logo}<span class="br">${BOOT.branch}</span><h1>매크로 분석</h1><span class="sp"></span>
+    ${ADMIN?`<span class="chip adm">관리자 모드</span><button class="btn" id="btn-refresh">지금 갱신</button>`:`<span class="chip">이용자 모드</span>`}
+    <a class="btn" href="/">← 메뉴</a><a class="btn" href="/ipo">IPO Radar</a><a class="btn" href="/logout">로그아웃</a>`;
+}
+function senti(){
+  const s = D.sentiment;
+  if(!s || !s.available) return `<div class="panel"><h3>시장 심리 지수(자체 산출)</h3>${empty("산출 불가", esc((s&&s.reason)||"구성 자료가 부족합니다"))}</div>`;
+  const comp = {vix:"VIX(낮을수록 탐욕)", hy:"하이일드 스프레드(좁을수록 탐욕)", momentum:"S&P 500 125일선 괴리(클수록 탐욕)"};
+  const hist = inRange(s.history);
+  const bands = "";
+  return `<div class="panel"><h3>시장 심리 지수(자체 산출) <span class="muted small">0 공포 ~ 100 탐욕 · ${s.date} 기준</span></h3>
+    <div class="gauge"><div style="display:flex;align-items:baseline;gap:10px"><span class="big">${fmt(s.value,"",0)}</span><b>${esc(s.label)}</b></div>
+      <div class="track" role="img" aria-label="심리 지수 ${fmt(s.value,"",0)}, ${esc(s.label)}"><span style="background:var(--fear-2)"></span><span style="background:var(--fear-1)"></span><span style="background:var(--mid)"></span><span style="background:var(--greed-1)"></span><span style="background:var(--greed-2)"></span><i class="mk" style="left:${Math.max(0,Math.min(100,s.value))}%"></i></div>
+      <div class="scale"><span>극단적 공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극단적 탐욕</span></div></div>
+    ${hist.length ? lineChart([{name:"심리 지수", unit:"0~100", points:hist}], {fixed:[0,100], ticks:[0,25,50,75,100], dec:0, direct:false}) : ""}
+    <div class="tw"><table><thead><tr><th>구성요소(최근 1년 백분위)</th><th class="r">점수</th></tr></thead><tbody>${Object.entries(s.components).map(([k,v])=>`<tr><td>${comp[k]||esc(k)}</td><td class="r num">${fmt(v,"",0)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">CNN 공포·탐욕 지수와 다른 자체 지표입니다. 각 구성요소의 최근 1년 백분위를 평균했고, 구성요소가 2개 미만인 날은 계산하지 않습니다(빠진 값을 0으로 보지 않음). 투자 판단의 근거가 아니라 시장 분위기 참고용입니다.</p></div>`;
+}
+function bondTable(){
+  const rows = [["us.2y","미국 2년"],["us.10y","미국 10년"],["us.30y","미국 30년"],["kr.3y","국고채 3년"],["kr.10y","국고채 10년"],["kr.30y","국고채 30년"]];
+  const cols = [["1d","전일"],["1w","1주"],["1m","1개월"],["ytd","연초 이후"],["1y","1년"]];
+  const body = rows.map(([k,label])=>{ const b = D.bonds[k];
+    if(!b || !b.date) return `<tr><td>${label}</td><td class="r">–</td>${cols.map(()=>`<td class="r">–</td>`).join("")}</tr>`;
+    return `<tr><td>${label} <span class="muted small num">${b.date}</span></td><td class="r num">${fmt(b.yield,"%",3)}%</td>${cols.map(([c])=>{ const m=b.moves[c];
+      return m?`<td class="r num" title="${m.from} 대비">${sgn(m.bp,1)}bp<br><span class="muted">가격 ${sgn(m.price_pct,2)}%</span></td>`:`<td class="r">–</td>`; }).join("")}</tr>`; }).join("");
+  return `<div class="panel"><h3>국채 금리와 가격 변화(추정)</h3><div class="tw"><table><thead><tr><th>만기</th><th class="r">금리</th>${cols.map(c=>`<th class="r">${c[1]}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>
+  <p class="note">가격 변화는 기준일 금리를 표면금리로 하는 만기 고정 액면채(반기 이자)를 가정해 금리 변화만으로 계산한 추정치입니다. 실제 개별 채권 가격·이자 수익과 다릅니다. 금리가 오르면 가격은 내려갑니다.</p></div>`;
+}
+function usage(){
+  const u = D.usage || {daily:[], total:{}};
+  const fx = S("fx.usdkrw"), rate = fx && fx.last ? fx.last[1] : null;
+  const cost = u.cost_usd;
+  const costTxt = u.priced ? `$${fmt(cost,"",2)}${rate?` <small>≈ ${fmt(cost*rate,"원",0)}원</small>`:""}` : "단가 미설정";
+  const tiles = `<div class="kpis">
+    <div class="kpi"><span class="lab">최근 ${u.days}일 호출</span><span class="val">${(u.total.calls||0).toLocaleString()}<small>회</small></span><span class="det">${esc(u.provider)} 기준</span></div>
+    <div class="kpi"><span class="lab">입력 토큰</span><span class="val">${(u.total.input||0).toLocaleString()}</span><span class="det">기업 자료·지시문</span></div>
+    <div class="kpi"><span class="lab">출력 토큰</span><span class="val">${(u.total.output||0).toLocaleString()}</span><span class="det">요약·생각 토큰 포함</span></div>
+    <div class="kpi"><span class="lab">추정 비용</span><span class="val"${u.priced?"":` style="font-size:16px;font-family:inherit"`}>${costTxt}</span><span class="det">${u.priced?`입력 $${u.price.input}/출력 $${u.price.output} (100만 토큰당)`:"무료 등급이면 0원"}</span></div></div>`;
+  const models = u.models.length ? `<div class="tw"><table><thead><tr><th>모델</th><th class="r">호출</th><th class="r">입력</th><th class="r">출력</th><th class="r">비용(USD)</th></tr></thead><tbody>${u.models.map(m=>`<tr><td>${esc(m.model)}</td><td class="r num">${m.calls}</td><td class="r num">${m.input.toLocaleString()}</td><td class="r num">${m.output.toLocaleString()}</td><td class="r num">${m.cost_usd!=null?m.cost_usd:"–"}</td></tr>`).join("")}</tbody></table></div>` : "";
+  return `${tiles}${u.daily.length ? barChart(u.daily) : empty("아직 기록된 사용량이 없습니다","AI 요약이 생성될 때마다 호출별 토큰 수가 기록됩니다(이 기능 추가 이후 호출부터).")}${models}
+    <p class="note">토큰 수는 AI 응답에 포함된 사용량 정보로 기록합니다. 비용은 서버 환경변수 IPO_RADAR_AI_PRICE_IN·IPO_RADAR_AI_PRICE_OUT(USD/100만 토큰)에 넣은 단가로 계산한 추정치이며, 실제 청구액은 Google AI Studio(또는 Anthropic Console) 결제 화면이 기준입니다.${rate?" 원화 환산은 ECOS 원/달러 최근 값 사용.":""}</p>`;
+}
+const STATUS = {ok:["정상","ok"], partial:["일부 실패","warn"], not_configured:["키 미설정","warn"], blocked:["접근 차단","bad"], error:["오류","bad"], never:["미수집",""]};
+function statusCard(){
+  const rows = Object.values(D.status).map(s=>{ const [lab,cls] = STATUS[s.status]||[s.status,""];
+    return `<tr><td>${esc(s.name)}${s.url?` <a class="small muted" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">출처</a>`:""}</td><td><span class="chip ${cls}">${lab}</span></td><td class="num">${kst(s.checked_at)}</td>${ADMIN?`<td class="small">${s.key?`${esc(s.key)}: ${s.key_set?"설정됨":"없음"} · `:""}${esc(s.message||"")}</td>`:""}</tr>`; }).join("");
+  return `<div class="tw"><table><thead><tr><th>자료원</th><th>상태</th><th>마지막 확인</th>${ADMIN?"<th>내용</th>":""}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function adminCard(){
+  if(!ADMIN) return "";
+  const manual = Object.values(D.series).filter(s=>s.source==="manual" && s.points.length);
+  const help = Object.entries(D.manual_help||{}).map(([k,v])=>`<li><b>${k}.</b> ${esc(v)}</li>`).join("");
+  return `<section class="card"><div class="ch"><h2>관리자 입력</h2><span class="muted small">CDS·DRAM·피자 지수처럼 무료 API가 없는 자료</span></div><div class="cb">
+    <p class="note">한 줄에 <b class="num">시리즈,날짜(YYYY-MM-DD),값</b> 을 쉼표로 적습니다. 같은 시리즈·날짜를 다시 넣으면 덮어씁니다. 출처(단말·리포트 이름과 조회일)는 시리즈 이름이나 아래 메모 관행으로 남겨 주세요. 원본에 없는 값은 넣지 마세요.</p>
+    <ul class="note" style="margin:0;padding-left:18px">${help}</ul>
+    <textarea id="mi-text" aria-label="관리자 입력 자료" placeholder="cds.삼성전자 5Y,2026-10-29,32&#10;dram.DDR5 16Gb 현물,2026-10-29,6.10&#10;pizza.지수,2026-10-29,3"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn pri" id="mi-save">저장</button><span id="mi-msg" class="small" role="status"></span></div>
+    ${manual.length?`<div class="tw"><table><thead><tr><th>입력된 시리즈</th><th class="r">값 개수</th><th>최근</th><th></th></tr></thead><tbody>${manual.map(s=>`<tr><td class="num">${esc(s.id)}</td><td class="r num">${s.points.length}</td><td class="num">${s.last[0]} · ${fmt(s.last[1],"",2)}</td><td><button class="btn" data-del="${esc(s.id)}">삭제</button></td></tr>`).join("")}</tbody></table></div>`:""}
+  </div></section>`;
+}
+
+function render(){
+  CHARTS.length = 0;
+  const fresh = D.refresh || {};
+  const krBase = S("kr.base"), usF = S("us.ffr");
+  const gap = krBase&&krBase.last&&usF&&usF.last ? krBase.last[1]-usF.last[1] : null;
+  const anyData = Object.values(D.series).some(s=>s.points.length);
+  $("#main").innerHTML = `
+  <div class="bar"><div class="seg" role="group" aria-label="그래프 기간">${RANGES.map(r=>`<button data-range="${r[0]}" aria-pressed="${r[0]===RANGE}">${r[1]}</button>`).join("")}</div>
+    <span>화면 생성 ${kst(D.generated_at)}</span><span>자동 갱신 ${fresh.every_hours||6}시간마다</span>
+    ${fresh.running?`<span class="chip warn">갱신 중…</span>`:""}</div>
+  ${!anyData?`<div class="banner"><b>아직 수집된 지표가 없습니다.</b><span>FRED_API_KEY·ECOS_API_KEY를 서버 환경변수에 넣으면 금리·국채·환율·VIX 등을 자동으로 받습니다. 두 키 모두 무료 발급입니다.</span></div>`:""}
+  <div class="kpis">
+    ${kpi("미국 국채 10년","us.10y",{dec:2})}
+    ${kpi("국고채 3년","kr.3y",{dec:3})}
+    ${kpi("한국 기준금리","kr.base")}
+    ${kpi("미국 기준금리(실효)","us.ffr")}
+    <div class="kpi"><span class="lab">한·미 금리차</span><span class="val">${gap!=null?sgn(gap,2):"–"}<small>%p</small></span><span class="det">한국 기준금리 − 미국 실효금리</span></div>
+    ${kpi("원/달러","fx.usdkrw",{unit:"원"})}
+    ${kpi("VIX","risk.vix")}
+    ${kpi("하이일드 스프레드","credit.hy")}
+    <div class="kpi"><span class="lab">시장 심리(자체)</span><span class="val">${D.sentiment&&D.sentiment.available?fmt(D.sentiment.value,"",0):"–"}</span><span class="det">${D.sentiment&&D.sentiment.available?esc(D.sentiment.label):"산출 불가"}</span></div>
+    ${kpi("암호화폐 공포·탐욕","fng.crypto")}
+  </div>
+
+  <section class="card"><div class="ch"><h2>금리·국채</h2><span class="muted small">FRED · 한국은행 ECOS</span></div><div class="cb">
+    <div class="g2">${panel("미국 국채 금리",["us.2y","us.10y","us.30y"],{short:["2년","10년","30년"]})}
+      ${panel("한국 기준금리·국고채",["kr.base","kr.3y","kr.10y","kr.30y"],{short:["기준","3년","10년","30년"]})}</div>
+    <div class="g2">${panel("미국 장단기 금리차(10년−2년)",["us.10y2y"],{zero:true, note:"0 아래(역전)는 단기 금리가 장기보다 높다는 뜻으로, 경기 둔화 신호로 자주 언급됩니다. 역전이 곧 경기침체를 뜻하지는 않습니다."})}
+      ${panel("미국 기준금리(연방기금 실효금리)",["us.ffr"])}</div>
+    ${bondTable()}
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>시장 심리·공포탐욕</h2><span class="muted small">자체 산출 · alternative.me · FRED</span></div><div class="cb">
+    <div class="g2">${senti()}
+      <div class="panel">${panel("암호화폐 공포·탐욕 지수",["fng.crypto"],{fixed:[0,100],ticks:[0,25,50,75,100],dec:0, note:"alternative.me가 비트코인 변동성·거래량·소셜 지표로 계산하는 암호화폐 시장 지수입니다. 주식시장 지수가 아닙니다."})}
+        ${manualPanel("sentiment","CNN 공포·탐욕 지수 등","CNN 지수는 공식 API가 없어 자동 수집하지 않습니다. 필요하면 CNN 화면 값을 관리자가 fng.CNN 시리즈로 입력하세요.")}</div></div>
+    <div class="g2">${panel("VIX 변동성 지수",["risk.vix"],{note:"S&P 500 옵션 가격에 반영된 향후 30일 기대 변동성. 보통 20 위면 불안, 30 위면 공포 국면으로 봅니다."})}
+      ${panel("S&P 500",["eq.sp500"])}</div>
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>신용 위험·CDS</h2><span class="muted small">관리자 입력 · FRED(ICE BofA)</span></div><div class="cb">
+    <div class="g2">${manualPanel("cds","기업 CDS 프리미엄(bp)","CDS 프리미엄은 무료 공개 API가 없어 자동 수집하지 않습니다(블룸버그·리피니티브 등 유료). 증권사 단말·리포트 값을 입력하면 표시됩니다. 값이 클수록 시장이 보는 부도 위험이 큽니다.")}
+      ${panel("미국 회사채 스프레드(국채 대비)",["credit.hy","credit.ig"],{short:["하이일드","투자등급"], note:"자동 수집되는 신용 위험 참고 지표입니다. 스프레드가 넓어지면 기업 자금 조달 여건이 나빠졌다는 뜻입니다."})}</div>
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>반도체·DRAM</h2><span class="muted small">관리자 입력 · FRED(미국 노동통계국)</span></div><div class="cb">
+    <div class="g2">${manualPanel("dram","DRAM 가격($)","DRAMeXchange(TrendForce)의 현물·고정거래 가격은 유료·회원 자료라 자동 수집하지 않습니다. 공개 기사·리포트의 값을 출처와 함께 입력하세요.")}
+      ${panel("미국 반도체 생산자물가지수(월)",["semi.ppi"],{note:"DRAM 가격 자체가 아니라 미국 반도체 제조업 출하가격 지수입니다. 업황 흐름 참고용."})}</div>
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>환율·달러·유가</h2><span class="muted small">한국은행 ECOS · FRED</span></div><div class="cb">
+    <div class="g2">${panel("원/달러 환율",["fx.usdkrw"])}${panel("달러 지수(무역가중, 광의)",["fx.dxy_broad"])}</div>
+    <div class="g2">${panel("WTI 원유($/배럴)",["cmd.wti"])}${manualPanel("custom","기타 관리자 입력 지표","금 가격 등 필요한 지표를 custom. 으로 시작하는 이름으로 입력하세요.")}</div>
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>피자 지수</h2><span class="muted small">관리자 입력</span></div><div class="cb">
+    ${manualPanel("pizza","펜타곤 피자 지수","미국 국방부 주변 피자 가게의 구글 지도 혼잡도를 근거로 한 민간 관측 지표(pizzint.watch 등)입니다. 공식 API가 없고 검증된 예측 지표가 아니므로 재미·참고용으로만 보세요.")}
+  </div></section>
+
+  <section class="card"><div class="ch"><h2>AI 토큰 사용량·비용</h2><span class="muted small">이 서비스의 AI 요약 호출 기록</span></div><div class="cb">${usage()}</div></section>
+
+  <section class="card"><div class="ch"><h2>자료원 상태</h2><span class="muted small">숫자는 각 기관 공개 자료이며 지연·수정될 수 있습니다</span></div><div class="cb">${statusCard()}
+    <p class="note">FRED 자료: Federal Reserve Bank of St. Louis(원 출처는 미 재무부·연준·ICE·CBOE·S&P·노동통계국 등). 한국 자료: 한국은행 경제통계시스템(ECOS). 투자 권유가 아닌 참고 자료입니다.</p></div></section>
+  ${adminCard()}`;
+}
+
+// ---------- 상호작용 ----------
+const tip = $("#tip");
+function showTip(html, e){ tip.innerHTML = html; tip.hidden = false;
+  tip.style.left = Math.min(e.clientX+14, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = Math.min(e.clientY+14, innerHeight - tip.offsetHeight - 8) + "px"; }
+document.addEventListener("pointermove", e=>{
+  const g = e.target.closest && e.target.closest("[data-tip]");
+  if(g){ showTip(g.dataset.tip.split("|").map((s,i)=>i?esc(s):`<b>${esc(s)}</b>`).join("<br>"), e); return; }
+  const svg = e.target.closest && e.target.closest("svg[data-chart]");
+  document.querySelectorAll("svg[data-chart] .xh").forEach(l=>{ if(!svg || l.ownerSVGElement!==svg) l.setAttribute("visibility","hidden"); });
+  if(!svg){ tip.hidden = true; return; }
+  const c = CHARTS[+svg.dataset.chart]; if(!c) return;
+  const r = svg.getBoundingClientRect(), vx = (e.clientX - r.left) / r.width * c.W;
+  if(vx < c.L || vx > c.W - c.R){ tip.hidden = true; svg.querySelector(".xh").setAttribute("visibility","hidden"); return; }
+  const ms = c.x0 + (vx - c.L) / (c.W - c.L - c.R) * (c.x1 - c.x0);
+  let best = c.dates[0], bd = Infinity; for(const d of c.dates){ const k = Math.abs(t(d)-ms); if(k<bd){ bd=k; best=d; } }
+  const xh = svg.querySelector(".xh"); const px = c.X(t(best)); xh.setAttribute("x1",px); xh.setAttribute("x2",px); xh.setAttribute("visibility","visible");
+  const lines = c.defs.map((d,i)=>{ const p = valueAt(d.points, t(best)); return p ? `<i style="background:${d.color||COLORS[i%4]}"></i>${esc(d.short||d.name)} <b>${fmt(p[1],c.unit,c.k)}</b>${p[0]!==best?` <span style="opacity:.7">(${p[0]})</span>`:""}` : null; }).filter(Boolean);
+  showTip(`<b>${best}</b><br>${lines.join("<br>")}`, e);
+});
+document.addEventListener("pointerleave", ()=>{ tip.hidden = true; });
+document.addEventListener("click", async e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  if(b.dataset.range){ RANGE = b.dataset.range; store.set("range", RANGE); render(); return; }
+  if(b.id==="btn-refresh"){ b.disabled = true;
+    const r = await post("/admin/macro-refresh"); flash(r.message || "요청했습니다"); startPoll(); return; }
+  if(b.id==="mi-save"){ const msg = $("#mi-msg"); const text = $("#mi-text").value;
+    if(!text.trim()){ msg.textContent = "입력할 내용이 없습니다"; return; }
+    const r = await post("/admin/macro-manual", {text});
+    if(r.saved){ await load(true); const m=$("#mi-msg"); if(m){ m.style.color="var(--good)"; m.textContent = r.message + (r.errors&&r.errors.length?" — "+r.errors.join(" / "):""); } if(r.errors && r.errors.length){ const ta=$("#mi-text"); if(ta) ta.value = text; } }
+    else { msg.style.color="var(--bad)"; msg.textContent = (r.message||"저장하지 못했습니다") + (r.errors&&r.errors.length?" — "+r.errors.join(" / "):""); }
+    return; }
+  if(b.dataset.del){ if(!confirm(`${b.dataset.del} 시리즈의 관리자 입력 값을 모두 지울까요? 되돌릴 수 없습니다.`)) return;
+    const r = await post("/admin/macro-manual", {delete: b.dataset.del}); flash(r.message||"삭제했습니다"); await load(true); }
+});
+async function post(url, body){
+  try{ const r = await fetch(url, {method:"POST", credentials:"same-origin", headers:{"X-Requested-With":"ipo-radar","Content-Type":"application/json"}, body: JSON.stringify(body||{})});
+    return await r.json().catch(()=>({message:`응답 오류 ${r.status}`})); }
+  catch(err){ return {message:"서버에 연결하지 못했습니다"}; }
+}
+function flash(m){ const el = document.createElement("div"); el.className="banner"; el.setAttribute("role","status"); el.textContent = m; $("#main").prepend(el); setTimeout(()=>el.remove(), 5000); }
+function startPoll(){ clearInterval(POLL); POLL = setInterval(async ()=>{ await load(true); if(!(D.refresh||{}).running){ clearInterval(POLL); POLL=null; } }, 15000); }
+async function load(keep){
+  try{
+    const r = await fetch("/api/macro", {cache:"no-store", credentials:"same-origin"});
+    if(r.status===401){ location.href = "/login"; return; }
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const y = scrollY; D = await r.json(); render(); if(keep) scrollTo(0, y);
+    if((D.refresh||{}).running && !POLL) startPoll();
+  }catch(err){
+    $("#main").innerHTML = `<div class="empty"><b>매크로 지표를 불러오지 못했습니다</b><span>${esc(err.message)} — 잠시 후 새로고침하세요.</span></div>`;
+  }
+}
+header(); load();
+</script>
+</body>
+</html>

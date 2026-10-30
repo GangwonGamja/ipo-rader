@@ -421,8 +421,28 @@ def make_handler(app):
             if not role:
                 return self._need_login(path)
             admin = role == "admin"
-            if path in ("/", "/index.html"):
+            if path in ("/", "/menu"):
+                return self._send(200, hub_page(app, role).encode("utf-8"), "text/html; charset=utf-8")
+            if path in ("/ipo", "/ipo/", "/index.html"):
                 return self._file(app["index"] if admin else view_name(app["index"]), "text/html; charset=utf-8")
+            if path in ("/macro", "/macro/"):
+                return self._send(200, macro_page(app, role).encode("utf-8"), "text/html; charset=utf-8")
+            if path == "/api/macro":
+                from . import macro
+                conn = connect()
+                try:
+                    if macro.needs_refresh(conn) and not macro.STATE["running"]:
+                        macro.refresh_async("on-view")  # 오래된 자료면 백그라운드에서 갱신(화면은 지금 자료로 먼저 그림)
+                    body = macro.build(conn)
+                finally:
+                    conn.close()
+                body["role"] = role
+                if not admin:  # 이용자에게는 오류 상세·키 이름을 보내지 않는다
+                    for st in body["status"].values():
+                        st.pop("message", None)
+                        st.pop("key_set", None)
+                    body["refresh"].pop("last_error", None)
+                return self._send(200, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             if path == "/data.json":
                 return self._file("data.json" if admin else "data_view.json", "application/json; charset=utf-8")
             if path == "/ipo_calendar.ics":
@@ -479,6 +499,36 @@ def make_handler(app):
                 res["access"] = access_info(app)
                 return self._send(200 if res["ok"] else 400, json.dumps(res, ensure_ascii=False).encode(),
                                   "application/json; charset=utf-8")
+            if path in ("/admin/macro-refresh", "/admin/macro-manual"):
+                if role != "admin":
+                    return self._send(403, "관리자만 할 수 있습니다.".encode())
+                if self.headers.get("X-Requested-With") != "ipo-radar":
+                    return self._send(400, b"bad request")
+                from . import macro
+                if path == "/admin/macro-refresh":
+                    started = macro.refresh_async("manual-admin")
+                    return self._send(202 if started else 409, json.dumps(
+                        {"started": started, "message": "매크로 지표 갱신을 시작했습니다" if started else "이미 갱신 중입니다"},
+                        ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                n = int(self.headers.get("Content-Length") or 0)
+                if n > 2_000_000:
+                    return self._send(413, "입력이 너무 깁니다(2MB 이하).".encode())
+                try:
+                    req = json.loads(self.rfile.read(n) or b"{}")
+                except ValueError:
+                    return self._send(400, b"bad json")
+                conn = connect()
+                try:
+                    if req.get("delete"):
+                        k = macro.delete_series(conn, str(req["delete"]))
+                        res = {"ok": k > 0, "deleted": k, "message": f"{k}개 값을 지웠습니다" if k else "지울 관리자 입력 자료가 없습니다"}
+                    else:
+                        res = macro.save_manual(conn, str(req.get("text") or ""))
+                        res["message"] = f"{res['saved']}행 저장" + (f", {len(res['errors'])}행 확인 필요" if res["errors"] else "")
+                finally:
+                    conn.close()
+                return self._send(200 if res.get("saved") or res.get("ok") else 400,
+                                  json.dumps(res, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             if path == "/admin/refresh":
                 if role != "admin":
                     return self._send(403, "관리자만 수집을 실행할 수 있습니다.".encode())
@@ -490,6 +540,76 @@ def make_handler(app):
                     ensure_ascii=False).encode(), "application/json; charset=utf-8")
             self._send(404, b"not found")
     return H
+
+
+def _brand_bits(app):
+    import html
+    b = app.get("brand") or {}
+    logo = f"<img src='{b['logo_data']}' alt='' style='height:26px'>" if b.get("logo_data") else "<b style='font-size:18px;color:#692c00'>IPO Radar</b>"
+    return logo, html.escape(b.get("branch") or "공모주 상담 데스크")
+
+
+def hub_page(app, role: str) -> str:
+    """로그인 후 첫 화면: 들어갈 대시보드를 고른다."""
+    import html
+    logo, branch = _brand_bits(app)
+    admin = role == "admin"
+    ipo_at = macro_at = "아직 없음"
+    dj = app["out"] / "data.json"
+    if dj.is_file():
+        try:
+            ipo_at = json.loads(dj.read_text(encoding="utf-8"))["meta"]["generated_at"][:16].replace("T", " ")
+        except Exception:
+            pass
+    try:
+        conn = connect()
+        try:
+            row = conn.execute("SELECT MAX(checked_at) t FROM macro_status").fetchone()
+            macro_at = (row["t"] or "아직 없음")[:16].replace("T", " ")
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    cards = [
+        ("/ipo", "IPO Radar · 공모주", "이번 주 청약 캘린더, 기업 공부 노트·재무, 적정가 판단, 수요예측 결과, 증거금 계산기",
+         f"마지막 수집 {ipo_at} (매주 월 08:00 자동)"),
+        ("/macro", "매크로 분석", "한·미 금리와 국채 가격 변화, 신용 스프레드·CDS, 공포·탐욕 지수, DRAM 가격, 피자 지수, AI 토큰 사용량·비용",
+         f"마지막 갱신 {macro_at} (6시간마다 자동)"),
+    ]
+    if admin:
+        cards.append(("/ipo#sources", "데이터 관리 · 관리자", "자료원 상태, 지금 갱신, 이용자 코드 변경", "관리자 모드에서만 보입니다"))
+    items = "".join(f"<a class='m' href='{h}'><b>{html.escape(t)}</b><span>{html.escape(d)}</span><em>{html.escape(f)}</em></a>"
+                    for h, t, d, f in cards)
+    chip = "<span class='chip adm'>관리자 모드</span>" if admin else "<span class='chip'>이용자 모드</span>"
+    return f"""<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>종합 대시보드</title>
+<style>
+:root{{--ink:#231815;--sub:#6f6259;--line:#e4ddd5;--brand:#692c00;--bg:#f6f4f1}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}}
+header{{background:#fff;border-bottom:1px solid var(--line);border-top:4px solid var(--brand)}}
+.in{{max-width:980px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
+.br{{font-weight:800}}.sp{{flex:1}}
+.chip{{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--sub)}}
+.chip.adm{{background:var(--ink);border-color:var(--ink);color:#fff}}
+.out{{font-size:13px;color:var(--sub);text-decoration:none;border:1px solid var(--line);border-radius:4px;padding:6px 10px;background:#fff}}
+main{{max-width:980px;margin:0 auto;padding:24px 16px}}
+h1{{font-size:20px;margin:0 0 4px}}p.lead{{margin:0 0 20px;color:var(--sub);font-size:14px}}
+.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}}
+a.m{{display:grid;gap:8px;align-content:start;background:#fff;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:6px;
+padding:18px;color:inherit;text-decoration:none;min-height:150px}}
+a.m:hover{{border-color:var(--brand)}}a.m:focus-visible{{outline:2px solid #b8873f;outline-offset:2px}}
+a.m b{{font-size:17px}}a.m span{{font-size:14px;line-height:1.6;color:var(--sub)}}a.m em{{font-style:normal;font-size:12px;color:var(--sub);margin-top:auto}}
+</style>
+<header><div class="in">{logo}<span class="br">{branch}</span><span class="sp"></span>{chip}<a class="out" href="/logout">로그아웃</a></div></header>
+<main><h1>종합 대시보드</h1><p class="lead">볼 화면을 고르세요. 각 화면 위쪽의 ‘← 메뉴’로 이 화면에 돌아옵니다.</p>
+<nav class="grid" aria-label="대시보드 메뉴">{items}</nav></main></html>"""
+
+
+def macro_page(app, role: str) -> str:
+    logo, branch = _brand_bits(app)
+    tpl = (config.DASHBOARD_DIR / "macro.html").read_text(encoding="utf-8")
+    boot = json.dumps({"role": role, "branch": branch, "logo": logo}, ensure_ascii=False).replace("</", "<\\/")
+    return tpl.replace("/*__MACRO_BOOT__*/null", boot)
 
 
 def preparing_page(app) -> str:
@@ -567,6 +687,8 @@ def serve(host: str | None = None, port: int | None = None):
     app = build_app()
     if config.SERVER_SCHEDULER:
         threading.Thread(target=app["runner"].scheduler, daemon=True).start()
+        from . import macro
+        threading.Thread(target=macro.loop, daemon=True).start()  # 매크로 지표는 6시간마다
     srv = ThreadingHTTPServer((host or config.SERVER_HOST, port or config.SERVER_PORT), make_handler(app))
     roles = sorted({c["role"] for c in app["codes"]})
     log(f"IPO Radar 서버 시작 http://{srv.server_address[0]}:{srv.server_address[1]} · 접속 코드 {roles} · 첫 화면 {app['index']}")

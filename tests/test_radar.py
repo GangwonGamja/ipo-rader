@@ -469,6 +469,12 @@ class TestServer(unittest.TestCase):
         (self.tmp / "data.json").write_text(json.dumps({**meta, "sources": [{"source": "dart", "last_error": "secret-err"}]}), encoding="utf-8")
         (self.tmp / "data_view.json").write_text(json.dumps({**meta, "sources": [{"source": "dart"}]}), encoding="utf-8")
         codes = [{"role": "admin", "secret": "admin-code-1"}, {"role": "viewer", "secret": server.hash_password("team-0915")}]
+        from ipo_radar import db as db_mod, macro
+        self.addCleanup(setattr, db_mod, "DB_PATH", db_mod.DB_PATH)
+        db_mod.DB_PATH = self.tmp / "srv.sqlite3"  # 실제 DB를 건드리지 않음
+        self.addCleanup(setattr, macro, "refresh_async", macro.refresh_async)
+        self.macro_kicks = []
+        macro.refresh_async = lambda trigger="manual": self.macro_kicks.append(trigger) or True  # 네트워크 수집 안 함
         self.app = server.build_app(out_dir=self.tmp, codes=codes, anon=False, with_sample=False, trust_proxy=False)
         self.app["index"] = "index.html"
         self.app["runner"].run_async = lambda trigger: True  # 실제 수집은 하지 않음
@@ -517,13 +523,13 @@ class TestServer(unittest.TestCase):
         code, loc, ck = self.login("team-0915")
         self.assertEqual((code, loc), (303, "/"))
         self.assertIn("HttpOnly", self.req("/login", "POST", {"code": "team-0915", "mode": "viewer"})[2]["set-cookie"])
-        self.assertEqual(self.req("/", cookie=ck)[1], b"<p>viewer-dash</p>")
+        self.assertEqual(self.req("/ipo", cookie=ck)[1], b"<p>viewer-dash</p>")
         self.assertNotIn(b"secret-err", self.req("/data.json", cookie=ck)[1])
         st = json.loads(self.req("/api/status", cookie=ck)[1])
         self.assertEqual(st["role"], "viewer")
         self.assertNotIn("last_error", st)
         _, _, ack = self.login("admin-code-1")
-        self.assertEqual(self.req("/", cookie=ack)[1], b"<p>admin-dash</p>")
+        self.assertEqual(self.req("/ipo", cookie=ack)[1], b"<p>admin-dash</p>")
         self.assertIn(b"secret-err", self.req("/data.json", cookie=ack)[1])
         self.assertEqual(json.loads(self.req("/api/status", cookie=ack)[1])["role"], "admin")
 
@@ -559,12 +565,57 @@ class TestServer(unittest.TestCase):
         _, _, ack = self.login("admin-code-1")
         self.app["runner"].state.update(running=True)
         pipeline.PROGRESS.update(stage="dart", since="2026-10-30T09:00:00+09:00", run_id="x")
-        code, body, _ = self.req("/", cookie=ack)
+        code, body, _ = self.req("/ipo", cookie=ack)
         self.assertEqual(code, 503)
         self.assertIn("DART 공시 확인", body.decode())
         self.app["runner"].state.update(running=False, last_error="RuntimeError: boom")
         pipeline.PROGRESS.update(stage=None)
-        self.assertIn("boom", self.req("/", cookie=ack)[1].decode())
+        self.assertIn("boom", self.req("/ipo", cookie=ack)[1].decode())
+
+    def test_hub_menu_and_macro_routes(self):
+        _, _, vck = self.login("team-0915")
+        _, _, ack = self.login("admin-code-1")
+        hub = self.req("/", cookie=vck)[1].decode()
+        self.assertIn('href=\'/ipo\'', hub)
+        self.assertIn('href=\'/macro\'', hub)
+        self.assertNotIn("데이터 관리 · 관리자", hub)          # 이용자 메뉴에는 관리 항목 없음
+        self.assertIn("데이터 관리 · 관리자", self.req("/", cookie=ack)[1].decode())
+        page = self.req("/macro", cookie=vck)[1].decode()
+        self.assertIn('"role": "viewer"', page)
+        self.assertNotIn("/*__MACRO_BOOT__*/", page)
+        self.assertEqual(self.req("/macro")[0], 303)            # 로그인 전에는 접속 화면으로
+        self.assertEqual(self.req("/api/macro")[0], 401)
+        js = json.loads(self.req("/api/macro", cookie=vck)[1])
+        self.assertIn("us.10y", js["series"])
+        self.assertTrue(all("message" not in st for st in js["status"].values()))  # 이용자에게 오류 상세 숨김
+        self.assertTrue(self.macro_kicks)                       # 자료가 없으면 백그라운드 갱신 요청
+        self.assertIn("message", json.loads(self.req("/api/macro", cookie=ack)[1])["status"]["fred"])
+
+    def test_macro_manual_input_admin_only(self):
+        H = {"X-Requested-With": "ipo-radar", "Content-Type": "application/json"}
+        _, _, vck = self.login("team-0915")
+        _, _, ack = self.login("admin-code-1")
+        body = json.dumps({"text": "cds.삼성전자 5Y,2026-10-28,31\ncds.삼성전자 5Y,2026-10-29,32\nbad line"})
+        import http.client
+        def post(path, payload, cookie, headers=H):
+            c = http.client.HTTPConnection("127.0.0.1", self.srv.server_address[1], timeout=5)
+            c.request("POST", path, body=payload.encode("utf-8"), headers={**headers, "Cookie": cookie})
+            r = c.getresponse()
+            out = (r.status, r.read())
+            c.close()
+            return out
+        self.assertEqual(post("/admin/macro-manual", body, vck)[0], 403)
+        self.assertEqual(post("/admin/macro-manual", body, ack, {"Content-Type": "application/json"})[0], 400)
+        code, raw = post("/admin/macro-manual", body, ack)
+        res = json.loads(raw)
+        self.assertEqual((code, res["saved"], len(res["errors"])), (200, 2, 1))
+        s = json.loads(self.req("/api/macro", cookie=vck)[1])["series"]["cds.삼성전자 5Y"]
+        self.assertEqual((s["group"], s["last"]), ("cds", ["2026-10-29", 32.0]))
+        code, raw = post("/admin/macro-manual", json.dumps({"delete": "cds.삼성전자 5Y"}), ack)
+        self.assertEqual(json.loads(raw)["deleted"], 2)
+        code, raw = post("/admin/macro-manual", json.dumps({"delete": "us.10y"}), ack)  # 자동 수집 시리즈는 못 지움
+        self.assertEqual(code, 400)
+        self.assertEqual(post("/admin/macro-refresh", "{}", ack)[0], 202)
 
     def test_codes_from_env_and_validation(self):
         import os
@@ -855,6 +906,133 @@ class TestSchedule(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["run_id"], "schedule-retry2")
         self.assertEqual(waits, [5, 5])
+
+
+class TestMacro(unittest.TestCase):
+    def setUp(self):
+        import os
+        self.tmp = Path(tempfile.mkdtemp())
+        self.conn = connect(self.tmp / "m.sqlite3")
+        self._env = {k: os.environ.get(k) for k in ("FRED_API_KEY", "ECOS_API_KEY", "IPO_RADAR_AI_PRICE_IN", "IPO_RADAR_AI_PRICE_OUT")}
+
+    def tearDown(self):
+        import os
+        for k, v in self._env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        http.set_transport(None)
+        self.conn.close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_collect_parses_sources_and_masks_keys(self):
+        import os
+        from ipo_radar import macro
+        os.environ["FRED_API_KEY"] = "fredsecret123"
+        os.environ["ECOS_API_KEY"] = "ecossecret456"
+        seen = []
+
+        def net(url, headers, data=None):
+            seen.append(url)
+            if "stlouisfed" in url:
+                if "series_id=VIXCLS" in url:
+                    return 500, b"oops"
+                return 200, json.dumps({"observations": [{"date": "2026-10-27", "value": "4.10"},
+                                                         {"date": "2026-10-28", "value": "."},
+                                                         {"date": "2026-10-29", "value": "4.15"}]}).encode()
+            if "ecos.bok.or.kr" in url:
+                if "010230000" in url:
+                    return 200, json.dumps({"RESULT": {"CODE": "INFO-200", "MESSAGE": "해당하는 데이터가 없습니다."}}).encode()
+                return 200, json.dumps({"StatisticSearch": {"list_total_count": 2, "row": [
+                    {"TIME": "20261028", "DATA_VALUE": "2.851"}, {"TIME": "20261029", "DATA_VALUE": "2,870"}]}}).encode()
+            if "alternative.me" in url:
+                if url.endswith("robots.txt"):
+                    return 404, b""
+                return 200, json.dumps({"data": [{"value": "40", "value_classification": "Fear", "timestamp": "1761696000"}]}).encode()
+            return 404, b""
+        http.set_transport(net, sleep=lambda s: None)
+        res = macro.collect(self.conn, today=date(2026, 10, 30))
+        self.assertEqual(res, {"fred": "partial", "ecos": "ok", "altme": "ok"})
+        rows = self.conn.execute("SELECT date, value FROM macro_points WHERE series='us.10y' ORDER BY date").fetchall()
+        self.assertEqual([tuple(r) for r in rows], [("2026-10-27", 4.10), ("2026-10-29", 4.15)])  # "." 결측은 버림
+        self.assertEqual(self.conn.execute("SELECT value FROM macro_points WHERE series='kr.3y' AND date='2026-10-29'").fetchone()[0], 2870.0)
+        st = {r["source"]: dict(r) for r in self.conn.execute("SELECT * FROM macro_status")}
+        self.assertIn("VIX", st["fred"]["message"])
+        self.assertNotIn("fredsecret123", json.dumps(st))      # 키가 화면용 메시지에 새지 않음
+        self.assertTrue(any("ecossecret456" in u for u in seen))
+        # 두 번째 수집은 최근 45일만 다시 요청
+        seen.clear()
+        macro.collect(self.conn, today=date(2026, 10, 30))
+        self.assertTrue(any("observation_start=2026-09-14" in u for u in seen if "DGS10" in u))
+
+    def test_missing_keys_marked_not_configured(self):
+        import os
+        from ipo_radar import macro
+        os.environ.pop("FRED_API_KEY", None)
+        os.environ.pop("ECOS_API_KEY", None)
+        http.set_transport(lambda u, h, d=None: (403, b""), sleep=lambda s: None)
+        res = macro.collect(self.conn, today=date(2026, 10, 30))
+        self.assertEqual((res["fred"], res["ecos"]), ("not_configured", "not_configured"))
+        self.assertEqual(res["altme"], "blocked")
+        out = macro.build(self.conn)
+        self.assertEqual(out["series"]["us.10y"]["points"], [])
+        self.assertFalse(out["sentiment"]["available"])
+
+    def test_manual_parse_rejects_bad_rows(self):
+        from ipo_radar import macro
+        rows, errs = macro.parse_manual("시리즈,날짜,값\ncds.A,2026-10-29,32\ndram.DDR5,2026/10/29,6.1\nus.10y,2026-10-29,4\n"
+                                        "pizza.지수,29-10-2026,3\ncds.B,2026-10-29,abc\n# 메모\ncds.C,2026-10-29")
+        self.assertEqual(rows, [("cds.A", "2026-10-29", 32.0), ("dram.DDR5", "2026-10-29", 6.1)])
+        self.assertEqual(len(errs), 4)
+
+    def test_bond_price_and_moves(self):
+        from ipo_radar import macro
+        self.assertAlmostEqual(macro.par_bond_price(4.0, 4.0, 10), 100.0, places=6)
+        self.assertLess(macro.par_bond_price(4.0, 4.5, 10), 100)
+        self.assertLess(macro.par_bond_price(4.0, 4.5, 30), macro.par_bond_price(4.0, 4.5, 10))  # 장기채가 더 민감
+        pts = [("2025-12-31", 4.0), ("2026-10-01", 4.2), ("2026-10-22", 4.3), ("2026-10-28", 4.4), ("2026-10-29", 4.5)]
+        m = macro.bond_moves(pts, 10)
+        self.assertEqual(m["moves"]["1d"]["bp"], 10.0)
+        self.assertEqual(m["moves"]["1w"]["from"], "2026-10-22")
+        self.assertEqual(m["moves"]["ytd"]["bp"], 50.0)
+        self.assertTrue(-4.5 < m["moves"]["ytd"]["price_pct"] < -3.5)
+        self.assertNotIn("1y", m["moves"])  # 1년 전 자료가 없으면 만들지 않음
+
+    def test_sentiment_index_needs_two_components(self):
+        from ipo_radar import macro
+        from datetime import timedelta
+        d0 = date(2025, 1, 1)
+        days = [(d0 + timedelta(days=i)).isoformat() for i in range(300)]
+        vix = [(d, 30 - i * 0.05) for i, d in enumerate(days)]       # 변동성 하락 → 탐욕
+        hy = [(d, 5 - i * 0.005) for i, d in enumerate(days)]        # 스프레드 축소 → 탐욕
+        self.assertFalse(macro.sentiment_index({"risk.vix": vix})["available"])
+        out = macro.sentiment_index({"risk.vix": vix, "credit.hy": hy})
+        self.assertTrue(out["available"])
+        self.assertGreater(out["value"], 90)
+        self.assertEqual(out["label"], "극단적 탐욕")
+        self.assertEqual(set(out["components"]), {"vix", "hy"})
+
+    def test_ai_usage_recorded_and_priced(self):
+        import os
+        from ipo_radar import ai, macro
+
+        class UsageBackend(FakeBackend):
+            def generate(self, system, text, schema):
+                body, model = super().generate(system, text, schema)
+                return {**body, "_usage": {"input": 1000, "output": 500, "total": 1500}}, model
+        orig = ai.make_client
+        ai.make_client = lambda: UsageBackend()
+        self.addCleanup(setattr, ai, "make_client", orig)
+        content = {"company": {"name": "A사", "sector": "x", "market": None, "underwriters": None, "status": "active"},
+                   "stage": "subscription", "facts": {}, "valuation": {}, "demand": {}, "summary": {"points": [], "risks": []}}
+        run = type("Run", (), {"at": "2026-10-30T08:00:00+09:00"})()
+        ai.refresh(self.conn, run, {"u1": content}, {"week_of": "2026-10-26", "picks": []})
+        self.assertNotIn("_usage", ai.load_notes(self.conn)["u1"])
+        u = macro.usage_summary(self.conn)
+        self.assertEqual((u["total"]["calls"], u["total"]["input"], u["total"]["output"], u["cost_usd"]), (2, 2000, 1000, None))
+        os.environ["IPO_RADAR_AI_PRICE_IN"], os.environ["IPO_RADAR_AI_PRICE_OUT"] = "0.5", "2"
+        self.assertAlmostEqual(macro.usage_summary(self.conn)["cost_usd"], 0.003)
 
 
 if __name__ == "__main__":
