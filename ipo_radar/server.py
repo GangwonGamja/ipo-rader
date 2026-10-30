@@ -221,7 +221,7 @@ def make_handler(app):
         def _file(self, name, ctype):
             p = app["out"] / name
             if not p.is_file():
-                return self._send(503, "대시보드를 준비 중입니다. 첫 수집이 끝나면 표시됩니다(보통 1분 이내). 잠시 후 새로고침하세요.".encode())
+                return self._send(503, preparing_page(app).encode("utf-8"), "text/html; charset=utf-8")
             self._send(200, p.read_bytes(), ctype)
 
         def do_HEAD(self):
@@ -265,6 +265,33 @@ def make_handler(app):
                     ensure_ascii=False).encode(), "application/json; charset=utf-8")
             self._send(404, b"not found")
     return H
+
+
+def preparing_page(app) -> str:
+    """대시보드 파일이 아직 없을 때: 진행 단계·경과 시간·실패 사유를 보여 주고 15초마다 새로고침."""
+    import html
+    from . import pipeline
+    st, runner = pipeline.PROGRESS, app["runner"]
+    if runner.state["running"] and st.get("stage"):
+        since = datetime.fromisoformat(st["since"]) if st.get("since") else None
+        mins = int((datetime.now(config.KST) - since).total_seconds() // 60) if since else 0
+        msg = f"수집 중입니다 — 현재 단계: {pipeline.STAGE_LABEL.get(st['stage'], st['stage'])} ({mins}분째)"
+    elif runner.state["running"]:
+        msg = "수집을 시작하는 중입니다."
+    elif runner.state.get("last_error"):
+        msg = f"수집이 실패해 대시보드를 만들지 못했습니다: {runner.state['last_error'][:300]} — 잠시 후 자동으로 다시 시도합니다."
+    else:
+        msg = "수집을 시작합니다."
+    now = time.time()
+    if not runner.state["running"] and now - app.get("last_kick", 0) > 300:  # 5분마다 한 번 자동 재시도
+        app["last_kick"] = now
+        runner.run_async("catch-up")
+    return ("<!doctype html><meta charset='utf-8'><meta http-equiv='refresh' content='15'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'><title>IPO Radar 준비 중</title>"
+            "<body style='font-family:system-ui,sans-serif;padding:32px;color:#231815;background:#f6f4f1'>"
+            "<h2 style='margin:0 0 12px'>대시보드를 준비하고 있습니다</h2>"
+            f"<p>{html.escape(msg)}</p><p style='color:#8a7c72'>이 화면은 15초마다 자동으로 새로고침됩니다. "
+            "서버가 잠들어 있다가 깨어난 경우 첫 수집에 1~5분 걸릴 수 있습니다.</p></body>")
 
 
 def build_app(out_dir: Path | None = None, users_spec: str | None = None, anon: bool | None = None,

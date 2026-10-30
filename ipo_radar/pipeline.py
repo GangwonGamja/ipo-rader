@@ -24,6 +24,13 @@ def _today(now: datetime) -> date:
     return now.astimezone(config.KST).date()
 
 
+# 서버의 '준비 중' 화면에 보여 줄 현재 진행 단계
+PROGRESS: dict = {"stage": None, "since": None, "run_id": None}
+STAGE_LABEL = {"seed": "기본 자료 불러오기", "ipostock": "IPOSTOCK 일정 수집", "dart": "DART 공시 확인", "financials": "DART 재무 조회",
+               "buzz": "뉴스·커뮤니티 수집", "search": "검색 추이 수집", "sample": "예시 데이터", "compute": "점수·가치평가·보고서",
+               "briefing": "주간 브리핑", "ai": "AI 요약 작성", "export": "대시보드 만들기"}
+
+
 class Run:
     def __init__(self, conn, now: datetime, trigger: str):
         self.conn, self.now, self.trigger = conn, now, trigger
@@ -39,6 +46,7 @@ class Run:
 
     def stage(self, name, fn, *a, **kw):
         t0 = time.time()
+        PROGRESS.update(stage=name, since=iso(), run_id=self.run_id)
         try:
             res = fn(*a, **kw)
             st = {"status": "ok", **(res or {})}
@@ -171,7 +179,9 @@ def refresh_financials(r: Run):
         set_source_status(r.conn, "dart_financials", None, "DART_API_KEY 미설정", status="not_configured", at=r.at)
         return {"degraded": True, "error": "DART_API_KEY 미설정"}
     n = 0
-    for c in r.conn.execute("SELECT uid, corp_code FROM companies WHERE corp_code IS NOT NULL AND is_sample=0 AND status='active'").fetchall():
+    # 일정이 잡힌 IPO 기업만 조회(신고서만 낸 기업 전체를 3년치씩 조회하면 수집이 매우 느려짐)
+    for c in r.conn.execute("""SELECT uid, corp_code FROM companies WHERE corp_code IS NOT NULL AND is_sample=0 AND status='active'
+                               AND kind='general' AND uid IN (SELECT uid FROM facts WHERE key LIKE 'sched.%')""").fetchall():
         annual = {}
         for y in range(r.today.year - 3, r.today.year):
             d = dart.financials(c["corp_code"], y)
@@ -403,10 +413,14 @@ def run(*, now: datetime | None = None, trigger: str = "manual", db_path=None, w
         r.stage("sample", sample.load, r)
     r.stage("compute", compute, r)
     r.stage("briefing", make_briefing, r)
+    if "export" not in skip:  # AI 요약을 기다리지 않고 대시보드를 먼저 만든다
+        PROGRESS.update(stage="export", since=iso(), run_id=r.run_id)
+        export.write(conn, now=now, out_dir=export_dir)
     if "ai" not in skip:
         r.stage("ai", run_ai, r)
     status = r.finish()
     if "export" not in skip:
         export.write(conn, now=now, out_dir=export_dir)
+    PROGRESS.update(stage=None, since=None, run_id=None)
     conn.close()
     return {"run_id": r.run_id, "status": status, "stages": r.stages}

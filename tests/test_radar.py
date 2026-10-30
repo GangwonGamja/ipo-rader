@@ -504,6 +504,20 @@ class TestServer(unittest.TestCase):
         st = json.loads(self.req("/api/status", "lee", "viewer-pass-123")[1])
         self.assertEqual((st["role"], st["generated_at"]), ("viewer", "2026-10-30T00:00:00+09:00"))
 
+    def test_preparing_page_shows_progress_and_error(self):
+        (self.tmp / "index.html").unlink()
+        from ipo_radar import pipeline
+        self.app["runner"].state.update(running=True)
+        pipeline.PROGRESS.update(stage="dart", since="2026-10-30T09:00:00+09:00", run_id="x")
+        code, body, h = self.req("/", "lee", "viewer-pass-123")
+        self.assertEqual(code, 503)
+        self.assertIn("DART 공시 확인", body.decode())
+        self.assertIn("refresh", body.decode())
+        self.app["runner"].state.update(running=False, last_error="RuntimeError: boom")
+        pipeline.PROGRESS.update(stage=None)
+        body = self.req("/", "lee", "viewer-pass-123")[1].decode()
+        self.assertIn("boom", body)
+
     def test_refresh_requires_admin_and_header(self):
         H = {"X-Requested-With": "ipo-radar"}
         self.assertEqual(self.req("/admin/refresh", "lee", "viewer-pass-123", "POST", H)[0], 403)
