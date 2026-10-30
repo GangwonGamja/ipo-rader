@@ -667,6 +667,27 @@ class TestAI(unittest.TestCase):
             else:
                 os.environ["GEMINI_API_KEY"] = old
 
+    def test_catchup_records_ai_status(self):
+        import os
+
+        from ipo_radar import pipeline
+        saved = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
+        try:
+            r = type("R", (), {"trigger": "catch-up", "conn": self.conn, "at": "2026-10-30T08:00:00+09:00"})()
+            pipeline.run_ai(r)
+            row = self.conn.execute("SELECT status, last_error FROM source_status WHERE source='ai_api'").fetchone()
+            self.assertEqual(row["status"], "not_configured")
+            self.assertIn("GEMINI_API_KEY", row["last_error"])
+            os.environ["GEMINI_API_KEY"] = "x"
+            pipeline.run_ai(r)
+            row = self.conn.execute("SELECT status FROM source_status WHERE source='ai_api'").fetchone()
+            self.assertEqual(row["status"], "disabled")
+        finally:
+            os.environ.pop("GEMINI_API_KEY", None)
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
+
     def test_not_configured_without_key(self):
         import os
 

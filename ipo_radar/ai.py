@@ -160,6 +160,15 @@ class ClaudeBackend:
         return json.loads(text_out), getattr(resp, "model", self.model)
 
 
+KEY_NAME = "ANTHROPIC_API_KEY" if PROVIDER == "claude" else "GEMINI_API_KEY"
+
+
+def has_key() -> bool:
+    if PROVIDER == "claude":
+        return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+
 def make_client():
     """설정된 공급자의 백엔드를 만든다. 키가 없으면 NotConfigured."""
     if PROVIDER == "claude":

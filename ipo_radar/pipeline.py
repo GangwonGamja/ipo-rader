@@ -352,6 +352,12 @@ def make_briefing(r: Run):
 def run_ai(r: Run):
     from . import ai
     if r.trigger.startswith("catch-up") and not ai.AI_ON_CATCHUP:
+        # 건너뛰더라도 '데이터 관리' 표에 상태가 보이게 기록
+        if ai.has_key():
+            set_source_status(r.conn, "ai_api", None, "서버 재시작 직후 수집에서는 생략 — 관리자가 '지금 갱신'을 누르면 생성",
+                              status="disabled", at=r.at)
+        else:
+            set_source_status(r.conn, "ai_api", None, f"{ai.KEY_NAME} 미설정", status="not_configured", at=r.at)
         return {"skipped_reason": "서버 재시작 직후 수집에서는 AI 요약을 건너뜀(IPO_RADAR_AI_ON_CATCHUP=1로 변경 가능)"}
     try:
         ai.make_client()
