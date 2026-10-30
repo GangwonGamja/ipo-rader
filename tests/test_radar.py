@@ -1012,7 +1012,8 @@ class TestMacro(unittest.TestCase):
             return 404, b""
         http.set_transport(net, sleep=lambda s: None)
         res = macro.collect(self.conn, today=date(2026, 10, 30))
-        self.assertEqual(res, {"fred": "partial", "ecos": "ok", "altme": "ok", "datagokr": "not_configured", "yahoo": "disabled"})
+        self.assertEqual({k: res[k] for k in ("fred", "ecos", "altme", "datagokr")},
+                         {"fred": "partial", "ecos": "ok", "altme": "ok", "datagokr": "not_configured"})
         rows = self.conn.execute("SELECT date, value FROM macro_points WHERE series='us.10y' ORDER BY date").fetchall()
         self.assertEqual([tuple(r) for r in rows], [("2026-10-27", 4.10), ("2026-10-29", 4.15)])  # "." 결측은 버림
         self.assertEqual(self.conn.execute("SELECT value FROM macro_points WHERE series='kr.3y' AND date='2026-10-29'").fetchone()[0], 2870.0)
@@ -1120,6 +1121,8 @@ class TestMacro(unittest.TestCase):
                 return 200, json.dumps(yahoo).encode()
             return 404, b""
         http.set_transport(net, sleep=lambda s: None)
+        self.assertTrue(macro.yahoo_enabled())                               # 기본 켜짐(내부 업무용)
+        macro.set_yahoo(False)
         res = macro.collect(self.conn, today=date(2026, 10, 31))
         self.assertEqual((res["datagokr"], res["yahoo"]), ("ok", "disabled"))
         self.assertFalse(any("finance.yahoo.com" in u for u, _ in seen))   # 꺼져 있으면 요청하지 않음
@@ -1135,7 +1138,7 @@ class TestMacro(unittest.TestCase):
         self.assertEqual(res["yahoo"], "ok")
         ys = [(u, ua) for u, ua in seen if "query1.finance.yahoo.com/v8" in u]
         self.assertEqual(len(ys), len([1 for v in macro.SERIES.values() if v[3] == "yahoo"]))
-        self.assertTrue(all(ua == config.USER_AGENT for _, ua in ys))          # 브라우저로 위장하지 않음
+        self.assertTrue(all("IPO-Radar" in ua and "compatible" in ua for _, ua in ys))  # 서비스 이름을 밝힘(위장 아님)
         sam = self.conn.execute("SELECT date, value FROM macro_points WHERE series='y.samsung' ORDER BY date").fetchall()
         self.assertEqual([tuple(r) for r in sam], [("2025-10-29", 70000.0), ("2025-10-31", 71500.0)])  # 빈 종가는 건너뜀
         # 한도 초과(429)면 나머지 종목은 요청하지 않음
@@ -1146,6 +1149,61 @@ class TestMacro(unittest.TestCase):
         self.assertEqual(len([u for u in calls if "/v8/" in u]), 1)
         macro.set_yahoo(False)
         self.assertFalse(macro.yahoo_enabled())
+
+    def test_keyless_sources_and_scraped_items(self):
+        import os
+        from ipo_radar import macro
+        os.environ.pop("FRED_API_KEY", None)
+        os.environ.pop("ECOS_API_KEY", None)
+        dram_html = """<table><tr><th>Item</th><th>Daily High</th><th>Daily Low</th><th>Session High</th><th>Session Low</th>
+          <th>Session Average</th><th>Session Change</th></tr>
+          <tr><td>DDR5 16Gb (2Gx8) 4800/5600</td><td>6.5</td><td>5.9</td><td>6.4</td><td>6.0</td><td>6.21</td><td>0.3 %</td></tr>
+          <tr><td>DDR4 8Gb (1Gx8) 3200</td><td>2.1</td><td>1.9</td><td>2.0</td><td>1.95</td><td>1.98</td><td>-0.1 %</td></tr>
+          <tr><td>NAND 64Gb</td><td>1</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr></table>"""
+        cnn = {"fear_and_greed": {"score": 41.3, "rating": "fear", "timestamp": "2026-10-30T20:00:00+00:00"},
+               "fear_and_greed_historical": {"data": [{"x": 1761696000000, "y": 55.0, "rating": "neutral"}]}}
+        seen = []
+
+        def net(url, headers, data=None):
+            seen.append((url, headers.get("User-Agent", "")))
+            if url.endswith("robots.txt"):
+                return 404, b""
+            if "fredgraph.csv" in url:
+                return 200, b"observation_date,X\n2026-10-28,4.10\n2026-10-29,.\n2026-10-30,4.20\n"
+            if "ecos.bok.or.kr" in url:
+                return 200, json.dumps({"StatisticSearch": {"list_total_count": 30, "row": [{"TIME": "20261030", "DATA_VALUE": "2.9"}]}}).encode()
+            if "dataviz.cnn.io" in url:
+                return 200, json.dumps(cnn).encode()
+            if "dramexchange" in url:
+                return 200, dram_html.encode()
+            if "pizzint" in url:
+                return 200, json.dumps({"data": {"status": {"doughconLevel": 3}}, "places": []}).encode()
+            if "finance.yahoo.com" in url and "%5EKS11" in url:
+                return 200, json.dumps({"chart": {"result": [{"meta": {"gmtoffset": 32400}, "timestamp": [1761782400],
+                                                              "indicators": {"quote": [{"close": [2611.0]}]}}]}}).encode()
+            if "finance.yahoo.com" in url and "%5ETNX" in url:
+                return 200, json.dumps({"chart": {"result": [{"meta": {"gmtoffset": 0}, "timestamp": [1761782400],
+                                                              "indicators": {"quote": [{"close": [41.8]}]}}]}}).encode()
+            return 404, b""
+        http.set_transport(net, sleep=lambda s: None)
+        res = macro.collect(self.conn, today=date(2026, 10, 31))
+        self.assertEqual((res["fred"], res["ecos"], res["cnn"], res["dramx"], res["pizzint"]), ("ok", "ok", "ok", "ok", "ok"))
+        self.assertTrue(any("/sample/json/kr/1/10/" in u for u, _ in seen))                  # ECOS 공개 샘플 키
+        self.assertFalse(any("releases/dates" in u for u, _ in seen))                        # 발표 일정은 키가 있을 때만
+        out = macro.build(self.conn)
+        self.assertEqual(tuple(out["series"]["us.10y"]["last"]), ("2026-10-30", 4.2))               # FRED CSV, "." 건너뜀
+        self.assertIn("공개 CSV", out["status"]["fred"]["message"])
+        self.assertEqual(tuple(out["series"]["fng.cnn"]["last"]), ("2026-10-30", 41.3))
+        drams = {k: v for k, v in out["series"].items() if k.startswith("dram.")}
+        self.assertEqual(sorted(v["last"][1] for v in drams.values()), [1.98, 6.21])          # Session Average 열, DDR만
+        self.assertTrue(all(v["dynamic"] and v["group"] == "dram" for v in drams.values()))
+        self.assertEqual(out["series"]["pizza.DOUGHCON 단계"]["last"][1], 3.0)
+        self.assertEqual(out["series"]["kr.kospi"]["source"], "yahoo")                       # 공공데이터 키 없으면 Yahoo로 대체
+        self.assertNotIn("y.kospi", out["series"])
+        self.assertEqual(macro.points(self.conn, ["kr.kospi"])["kr.kospi"], [("2025-10-30", 2611.0)])
+        # 표 머리글이 없으면 DRAM 값을 만들지 않음
+        self.assertEqual(macro.parse_dramx("<table><tr><td>DDR5 16Gb</td><td>6.2</td></tr></table>"), [])
+        self.assertIsNone(macro.find_doughcon({"level": 3}))
 
     def test_user_refresh_cooldown(self):
         from ipo_radar import macro
@@ -1160,15 +1218,16 @@ class TestMacro(unittest.TestCase):
         self.assertIn("최신 자료", r["message"])
         self.assertEqual(started, ["user"])
 
-    def test_missing_keys_marked_not_configured(self):
+    def test_blocked_everywhere_is_reported_not_faked(self):
         import os
         from ipo_radar import macro
         os.environ.pop("FRED_API_KEY", None)
         os.environ.pop("ECOS_API_KEY", None)
         http.set_transport(lambda u, h, d=None: (403, b""), sleep=lambda s: None)
         res = macro.collect(self.conn, today=date(2026, 10, 30))
-        self.assertEqual((res["fred"], res["ecos"]), ("not_configured", "not_configured"))
-        self.assertEqual(res["altme"], "blocked")
+        self.assertEqual((res["fred"], res["ecos"], res["altme"]), ("blocked", "blocked", "blocked"))
+        self.assertEqual((res["cnn"], res["dramx"], res["pizzint"]), ("blocked", "blocked", "blocked"))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM macro_points").fetchone()[0], 0)
         out = macro.build(self.conn)
         self.assertIsNone(out["series"]["us.10y"]["last"])
         self.assertNotIn("points", out["series"]["us.10y"])   # 그래프 점은 /api/macro/points로 따로

@@ -94,6 +94,18 @@ SERIES = {
     "y.gold": ("global", "금 선물", "$/oz", "yahoo", "GC=F"),
     "y.btc": ("global", "비트코인", "$", "yahoo", "BTC-USD"),
     "y.usdjpy": ("global", "달러/엔", "엔", "yahoo", "JPY=X"),
+    "fng.cnn": ("sentiment", "CNN 공포·탐욕 지수", "0~100", "cnn", "graphdata"),
+    # 키 없이 쓰는 대체 경로(Yahoo). 공식 자료(FRED·ECOS·공공데이터)가 없을 때만 그 자리에 쓴다
+    "y.gspc": ("_fb", "S&P 500(Yahoo)", "pt", "yahoo", "^GSPC"),
+    "y.ixic": ("_fb", "나스닥 종합(Yahoo)", "pt", "yahoo", "^IXIC"),
+    "y.dji": ("_fb", "다우존스(Yahoo)", "pt", "yahoo", "^DJI"),
+    "y.vix": ("_fb", "VIX(Yahoo)", "pt", "yahoo", "^VIX"),
+    "y.tnx": ("_fb", "미국 국채 10년(Yahoo)", "%", "yahoo", "^TNX"),
+    "y.tyx": ("_fb", "미국 국채 30년(Yahoo)", "%", "yahoo", "^TYX"),
+    "y.krw": ("_fb", "원/달러(Yahoo)", "원", "yahoo", "KRW=X"),
+    "y.cl": ("_fb", "WTI 원유 선물(Yahoo)", "$/bbl", "yahoo", "CL=F"),
+    "y.kospi": ("_fb", "코스피(Yahoo)", "pt", "yahoo", "^KS11"),
+    "y.kosdaq": ("_fb", "코스닥(Yahoo)", "pt", "yahoo", "^KQ11"),
 }
 
 SOURCES = {
@@ -101,7 +113,10 @@ SOURCES = {
     "ecos": {"name": "한국은행 ECOS", "key": "ECOS_API_KEY", "url": "https://ecos.bok.or.kr"},
     "altme": {"name": "alternative.me 암호화폐 공포·탐욕 지수", "key": None, "url": "https://alternative.me/crypto/fear-and-greed-index/"},
     "datagokr": {"name": "공공데이터포털 금융위원회 지수시세", "key": "DATA_GO_KR_KEY", "url": "https://www.data.go.kr/data/15094807/openapi.do"},
-    "yahoo": {"name": "Yahoo Finance (비공식·선택)", "key": None, "url": "https://finance.yahoo.com"},
+    "yahoo": {"name": "Yahoo Finance (비공식)", "key": None, "url": "https://finance.yahoo.com"},
+    "cnn": {"name": "CNN 공포·탐욕 지수 (비공식)", "key": None, "url": "https://edition.cnn.com/markets/fear-and-greed"},
+    "dramx": {"name": "DRAMeXchange DRAM 현물가 (웹 화면)", "key": None, "url": "https://www.dramexchange.com/"},
+    "pizzint": {"name": "PizzINT 펜타곤 피자 지수 (비공식)", "key": None, "url": "https://www.pizzint.watch/"},
     "manual": {"name": "관리자 입력", "key": None, "url": None},
 }
 
@@ -219,8 +234,9 @@ def fetch_fred(code: str, start: date, key: str) -> list[tuple[str, float]]:
 
 
 def fetch_ecos(code: str, start: date, end: date, key: str) -> list[tuple[str, float]]:
+    """key='sample'이면 한국은행이 공개한 샘플 키(요청당 10건)로 최근 값만 받는다."""
     stat, cycle, item = code.split("/")
-    out, first, page = [], 1, 1000
+    out, first, page = [], 1, (10 if key == "sample" else 1000)
     while True:
         url = (f"https://ecos.bok.or.kr/api/StatisticSearch/{key}/json/kr/{first}/{first + page - 1}/{stat}/{cycle}/"
                f"{start.strftime('%Y%m%d')}/{end.strftime('%Y%m%d')}/{item}")
@@ -238,8 +254,131 @@ def fetch_ecos(code: str, start: date, end: date, key: str) -> list[tuple[str, f
             out.append((f"{t[:4]}-{t[4:6]}-{t[6:]}", v))
         total = int(_num(body.get("list_total_count")) or 0)
         first += page
-        if first > total or first > 20000:
+        if key == "sample" or first > total or first > 20000:
             return out
+
+
+BOT_UA = "Mozilla/5.0 (compatible; IPO-Radar/1.0; internal research dashboard)"  # 서비스 이름을 밝히는 일반 형식(브라우저 위장 아님)
+
+
+def fetch_fred_csv(code: str, start: date) -> list[tuple[str, float]]:
+    """키가 없을 때: FRED 공개 그래프 CSV 내려받기 경로."""
+    txt = http.fetch(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={code}&cosd={start.isoformat()}",
+                     headers={"User-Agent": BOT_UA})
+    out = []
+    for line in txt.splitlines()[1:]:
+        parts = line.strip().split(",")
+        if len(parts) >= 2 and len(parts[0]) == 10:
+            v = _num(parts[1])
+            if v is not None:
+                out.append((parts[0], v))
+    if not out and "<html" in txt[:500].lower():
+        raise http.FetchError("FRED CSV 대신 웹페이지가 왔습니다(형식 변경 또는 차단)")
+    return out
+
+
+def fetch_cnn(start: date) -> list[tuple[str, float]]:
+    """CNN 공포·탐욕 지수(CNN 화면이 쓰는 공개 JSON, 비공식)."""
+    js = http.fetch_json(f"https://production.dataviz.cnn.io/index/fearandgreed/graphdata/{start.isoformat()}",
+                         headers={"User-Agent": BOT_UA, "Accept": "application/json"}, attempts=2)
+    out = {}
+    for r in ((js.get("fear_and_greed_historical") or {}).get("data") or []):
+        v, x = _num(r.get("y")), r.get("x")
+        if v is not None and x:
+            out[datetime.utcfromtimestamp(int(float(x)) / 1000).date().isoformat()] = round(v, 1)
+    cur = js.get("fear_and_greed") or {}
+    if _num(cur.get("score")) is not None and cur.get("timestamp"):
+        try:
+            d = datetime.fromisoformat(str(cur["timestamp"]).replace("Z", "+00:00")).date().isoformat()
+            out[d] = round(_num(cur["score"]), 1)
+        except ValueError:
+            pass
+    if not out:
+        raise http.FetchError(f"CNN 응답 형식 미확인: 최상위 키 {list(js)[:8]}")
+    return sorted(out.items())
+
+
+class _TableParser:
+    """표 안의 행을 칸 글자 목록으로 모은다(표준 라이브러리 html.parser)."""
+
+    def __init__(self):
+        from html.parser import HTMLParser
+        rows, cur, cell = [], [None], [None]
+
+        class P(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                if tag == "tr":
+                    cur[0] = []
+                elif tag in ("td", "th") and cur[0] is not None:
+                    cell[0] = []
+
+            def handle_endtag(self, tag):
+                if tag in ("td", "th") and cur[0] is not None and cell[0] is not None:
+                    cur[0].append(" ".join("".join(cell[0]).split()))
+                    cell[0] = None
+                elif tag == "tr" and cur[0] is not None:
+                    if cur[0]:
+                        rows.append(cur[0])
+                    cur[0] = None
+
+            def handle_data(self, data):
+                if cell[0] is not None:
+                    cell[0].append(data)
+        self.rows, self._p = rows, P()
+
+    def feed(self, html: str) -> list[list[str]]:
+        self._p.feed(html)
+        return self.rows
+
+
+def parse_dramx(html: str) -> list[tuple[str, float]]:
+    """DRAMeXchange 첫 화면 현물가 표: 머리글에서 'Session Average' 열을 찾은 경우에만 DDR 품목 값을 읽는다."""
+    out, col = [], None
+    for row in _TableParser().feed(html):
+        low = [c.lower() for c in row]
+        if any("session average" in c for c in low):
+            col = next(i for i, c in enumerate(low) if "session average" in c)
+            continue
+        if col is not None and row and row[0].upper().startswith("DDR") and len(row) > col:
+            v = _num(row[col])
+            if v is not None:
+                out.append((row[0][:60].replace(",", " "), v))
+    return out
+
+
+def fetch_dramx() -> list[tuple[str, float]]:
+    rows = parse_dramx(http.fetch("https://www.dramexchange.com/", headers={"User-Agent": BOT_UA}))
+    if not rows:
+        raise http.FetchError("DRAM 현물가 표 형식 미확인('Session Average' 열·DDR 품목을 찾지 못함)")
+    return rows
+
+
+def find_doughcon(js) -> float | None:
+    """피자 지수 응답에서 이름에 doughcon이 들어간 1~5 숫자만 찾는다(형식 미확인 → 추측하지 않음)."""
+    stack = [js]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if "doughcon" in str(k).lower():
+                    n = _num(v) if not isinstance(v, (dict, list)) else None
+                    if n is not None and 1 <= n <= 5:
+                        return n
+                stack.append(v)
+        elif isinstance(x, list):
+            stack.extend(x[:200])
+    return None
+
+
+def fetch_pizzint() -> float:
+    import time as _t
+    js = http.fetch_json(f"https://www.pizzint.watch/api/dashboard-data?_t={int(_t.time() * 1000)}",
+                         headers={"User-Agent": BOT_UA, "Accept": "application/json"}, attempts=2)
+    v = find_doughcon(js)
+    if v is None:
+        keys = list(js)[:10] if isinstance(js, dict) else type(js).__name__
+        raise http.FetchError(f"피자 지수 응답 형식 미확인(doughcon 값 없음): 최상위 키 {keys}")
+    return v
 
 
 def fetch_altme(days: int) -> list[tuple[str, float]]:
@@ -281,9 +420,10 @@ def fetch_datagokr(name: str, start: date, end: date, key: str) -> list[tuple[st
 
 
 def yahoo_enabled() -> bool:
-    if os.environ.get("IPO_RADAR_YAHOO") == "1":
-        return True
-    return (_load_keys().get("_yahoo") or {}).get("value") == "on"
+    """기본 켜짐(내부 업무용). 관리자가 끄거나 IPO_RADAR_YAHOO=0 이면 꺼짐."""
+    if os.environ.get("IPO_RADAR_YAHOO") == "0":
+        return False
+    return (_load_keys().get("_yahoo") or {}).get("value") != "off"
 
 
 def set_yahoo(on: bool) -> dict:
@@ -304,7 +444,7 @@ def fetch_yahoo(symbol: str, start: date, today: date) -> list[tuple[str, float]
     p1 = int(datetime(start.year, start.month, start.day, tzinfo=config.KST).timestamp())
     p2 = int(datetime(today.year, today.month, today.day, tzinfo=config.KST).timestamp()) + 2 * 86400
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol, safe='')}?period1={p1}&period2={p2}&interval=1d"
-    js = http.fetch_json(url, attempts=1)  # robots.txt 확인, 재시도 없이(차단·한도 시 바로 멈춤)
+    js = http.fetch_json(url, attempts=1, headers={"User-Agent": BOT_UA})  # robots.txt 확인, 재시도 없이(차단·한도 시 바로 멈춤)
     res = ((js.get("chart") or {}).get("result") or [None])[0]
     if not res:
         raise http.FetchError(f"Yahoo 응답 오류: {str((js.get('chart') or {}).get('error'))[:120]}")
@@ -364,7 +504,7 @@ def collect(conn, today: date | None = None) -> dict:
         key = get_key(key_name) if key_name else ""
         ids = [sid for sid, s in SERIES.items() if s[3] == src]
         if src == "yahoo" and not yahoo_enabled():
-            _status(conn, src, "disabled", "꺼져 있음 — 관리자가 'API 키·자료 관리' 탭에서 켜면 수집합니다(비공식 경로, 이용약관 확인 필요)")
+            _status(conn, src, "disabled", "관리자가 껐음 — 'API 키·자료 관리' 탭에서 다시 켤 수 있습니다")
             summary[src] = "disabled"
             continue
         if src == "yahoo":
@@ -374,7 +514,9 @@ def collect(conn, today: date | None = None) -> dict:
             conn.commit()
             summary[src] = "ok" if not errs else ("partial" if n else "error")
             continue
-        if key_name and not key:
+        if not key and src in ("fred", "ecos"):
+            key = "sample" if src == "ecos" else ""  # 키가 없어도 받기: FRED 공개 CSV, ECOS 샘플 키(최근 값만)
+        elif key_name and not key:
             _status(conn, src, "not_configured", f"{key_name} 미등록 — 매크로 화면 'API 키·자료 관리' 탭(관리자 모드)에서 등록하면 자동 수집합니다")
             summary[src] = "not_configured"
             continue
@@ -391,9 +533,9 @@ def collect(conn, today: date | None = None) -> dict:
                 start = date.fromisoformat(last) - timedelta(days=45)
             try:
                 if src == "fred":
-                    pts = fetch_fred(code, start, key)
+                    pts = fetch_fred(code, start, key) if key else fetch_fred_csv(code, start)
                 elif src == "ecos":
-                    pts = fetch_ecos(code, start, today, key)
+                    pts = fetch_ecos(code, start if key != "sample" else today - timedelta(days=20), today, key)
                 elif src == "datagokr":
                     pts = fetch_datagokr(code, max(start, date(2020, 1, 1)), today, key)
                 else:
@@ -401,17 +543,49 @@ def collect(conn, today: date | None = None) -> dict:
                 n += _upsert(conn, sid, pts, src, now)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{SERIES[sid][1]}: {type(e).__name__}: {e}")
-        if src == "fred":  # 미국 경제지표 발표 일정(FRED 공표일 기준)
+        if src == "fred" and key:  # 미국 경제지표 발표 일정(FRED 공표일 기준, API 키 필요)
             try:
                 k = save_releases(conn, fetch_fred_releases(key, today), now)
                 n += k
             except Exception as e:  # noqa: BLE001
                 errs.append(f"경제지표 발표 일정: {type(e).__name__}: {e}")
         status = "ok" if not errs else ("partial" if n else ("blocked" if any("거부" in x or "robots" in x for x in errs) else "error"))
-        _status(conn, src, status, "; ".join(errs[:4]) if errs else f"{len(ids)}개 지표 갱신", n)
+        how = (" (키 없이 공개 CSV — 키를 등록하면 경제지표 발표 일정도 받음)" if src == "fred" and not key else
+               " (공개 샘플 키 — 최근 값만, 키를 등록하면 과거 자료까지)" if key == "sample" else "")
+        _status(conn, src, status, ("; ".join(errs[:4]) if errs else f"{len(ids)}개 지표 갱신") + how, n)
         conn.commit()
         summary[src] = status
+    for src, fn in (("cnn", _collect_cnn), ("dramx", _collect_dramx), ("pizzint", _collect_pizzint)):
+        try:
+            n, msg = fn(conn, today, now)
+            _status(conn, src, "ok", msg, n)
+            summary[src] = "ok"
+        except Exception as e:  # noqa: BLE001
+            blocked = getattr(e, "blocked", False)
+            _status(conn, src, "blocked" if blocked else "error", f"{type(e).__name__}: {e}", 0)
+            summary[src] = "blocked" if blocked else "error"
+        conn.commit()
     return summary
+
+
+def _collect_cnn(conn, today, now):
+    rng = conn.execute("SELECT MAX(date) b FROM macro_points WHERE series='fng.cnn'").fetchone()
+    start = date.fromisoformat(rng["b"]) - timedelta(days=10) if rng["b"] else today - timedelta(days=HISTORY_DAYS)
+    pts = fetch_cnn(start)
+    return _upsert(conn, "fng.cnn", pts, "cnn", now), f"{len(pts)}일치 갱신"
+
+
+def _collect_dramx(conn, today, now):
+    rows = fetch_dramx()  # 현물가는 하루 단위로 쌓는다(과거 값은 사이트가 주지 않음)
+    for item, v in rows:
+        _upsert(conn, f"dram.{item} 현물(평균)", [(today.isoformat(), v)], "dramx", now)
+    return len(rows), f"DDR 현물가 {len(rows)}개 품목 (오늘부터 매일 쌓임)"
+
+
+def _collect_pizzint(conn, today, now):
+    v = fetch_pizzint()
+    _upsert(conn, "pizza.DOUGHCON 단계", [(today.isoformat(), v)], "pizzint", now)
+    return 1, f"DOUGHCON {v:.0f} (오늘부터 매일 쌓임)"
 
 
 def refresh(trigger: str = "manual") -> dict | None:
@@ -691,13 +865,27 @@ def _version(conn) -> tuple:
     return (r["n"], r["f"])
 
 
+FALLBACK = {"eq.sp500": "y.gspc", "eq.nasdaq": "y.ixic", "eq.dow": "y.dji", "risk.vix": "y.vix", "us.10y": "y.tnx",
+            "us.30y": "y.tyx", "fx.usdkrw": "y.krw", "cmd.wti": "y.cl", "kr.kospi": "y.kospi", "kr.kosdaq": "y.kosdaq"}
+
+
+def _fix_yahoo(sid, pts):
+    if sid in ("y.tnx", "y.tyx"):  # 지수 표기가 금리×10인 경우를 바로잡음
+        return [(d, v / 10 if v > 20 else v) for d, v in pts]
+    return pts
+
+
 def _raw(conn) -> tuple[dict, dict]:
+    """공식 자료가 없거나 대체 경로가 더 최신이면 Yahoo 값을 그 지표 자리에 쓴다(출처는 'yahoo'로 표시)."""
     rows = conn.execute("SELECT series, date, value, source FROM macro_points ORDER BY series, date").fetchall()
     raw: dict[str, list[tuple[str, float]]] = {}
     src: dict[str, str] = {}
     for r in rows:
         raw.setdefault(r["series"], []).append((r["date"], r["value"]))
         src[r["series"]] = r["source"]
+    for prim, fb in FALLBACK.items():
+        if fb in raw and not raw.get(prim):
+            raw[prim], src[prim] = _fix_yahoo(fb, raw[fb]), "yahoo"
     return raw, src
 
 
@@ -728,6 +916,8 @@ def build(conn) -> dict:
     raw, src = _raw(conn)
     series = {}
     for sid, pts in raw.items():
+        if sid in SERIES and SERIES[sid][0] == "_fb":
+            continue  # 대체 경로는 원래 지표 자리에 합쳐서 보여 줌
         if sid in SERIES:
             g, name, unit, source, code = SERIES[sid]
         else:
@@ -738,7 +928,11 @@ def build(conn) -> dict:
                        "years": sorted({d[:4] for d, _ in pts}, reverse=True),
                        "chg_1d": ({"from": pts[-2][0], "delta": round(pts[-1][1] - pts[-2][1], 6)} if len(pts) > 1 else None),
                        "chg_1w": _change(pts, 7), "chg_1m": _change(pts, 30)}
+    for sid in series:
+        series[sid]["dynamic"] = sid not in SERIES  # 관리자 입력·웹 화면에서 품목별로 생기는 지표
     for sid, (g, name, unit, source, code) in SERIES.items():  # 아직 자료가 없는 지표도 빈 상태로 보여 준다
+        if g == "_fb":
+            continue
         series.setdefault(sid, {"id": sid, "group": g, "name": name, "unit": unit, "source": source, "code": code,
                                 "last": None, "first": None, "count": 0, "years": [], "chg_1d": None, "chg_1w": None, "chg_1m": None})
     status = {r["source"]: dict(r) for r in conn.execute("SELECT * FROM macro_status").fetchall()}
@@ -772,6 +966,10 @@ def points(conn, ids: list[str]) -> dict:
         for r in conn.execute(f"SELECT series, date, value FROM macro_points WHERE series IN ({q}) ORDER BY series, date", want):
             out.setdefault(r["series"], []).append((r["date"], r["value"]))
         for i in want:
+            if not out.get(i) and i in FALLBACK:  # 공식 자료가 없으면 대체 경로
+                fb = FALLBACK[i]
+                out[i] = _fix_yahoo(fb, [(r["date"], r["value"]) for r in conn.execute(
+                    "SELECT date, value FROM macro_points WHERE series=? ORDER BY date", (fb,))])
             out.setdefault(i, [])
     if SENTIMENT_ID in ids:
         raw, _ = _raw(conn)
@@ -891,6 +1089,9 @@ def morning_checks(raw: dict, today: date | None = None) -> list[dict]:
         ch = _change(hy, 7)
         if ch and ch["delta"] >= 0.30:
             add("warn", "credit.hy", f"미국 하이일드 스프레드 1주 {ch['delta'] * 100:+.0f}bp 확대 (기준 +30bp 이상)", hy[-1][0])
+    a = last1("fng.cnn")
+    if a and (a[1] <= 25 or a[1] >= 75):
+        add("info", "fng.cnn", f"CNN 공포·탐욕 지수 {a[1]:.0f} — {'극단적 공포' if a[1] <= 25 else '극단적 탐욕'} 구간", a[0])
     a = last1("fng.crypto")
     if a and (a[1] <= 20 or a[1] >= 80):
         add("info", "fng.crypto", f"암호화폐 공포·탐욕 지수 {a[1]:.0f} — {'극단적 공포' if a[1] <= 20 else '극단적 탐욕'} 구간", a[0])

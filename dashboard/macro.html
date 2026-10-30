@@ -184,7 +184,9 @@ function S(id){
   return D && D.series[id];
 }
 const GROUP_PREFIX = {sentiment:"fng"};
-function manualIds(group){ return Object.values(D.series).filter(s=>s.group===group && s.source==="manual" && s.count).sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>s.id); }
+const AUTO_SRC = {dram:"dramx", pizza:"pizzint"};
+const SRC_LABEL = {manual:"관리자 입력", dramx:"DRAMeXchange 자동", pizzint:"PizzINT 자동", yahoo:"Yahoo", cnn:"CNN"};
+function manualIds(group){ return Object.values(D.series).filter(s=>s.group===group && s.dynamic && s.count).sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>s.id); }
 function needIds(tab){
   return ({markets:MARKET_PANELS.map(x=>x[1]),
     rates:["us.2y","us.10y","us.30y","kr.base","kr.3y","kr.10y","kr.30y","us.10y2y","us.ffr"],
@@ -235,7 +237,7 @@ function dateLabel(ms, spanDays){ const d=new Date(ms); const y=d.getUTCFullYear
 function lineChart(defs, opts={}){
   defs = defs.filter(d => d.points && d.points.length);
   if(!defs.length) return "";
-  const W=640, H=opts.h||220, L=48, T=10, B=24, labels = defs.length<=4 && opts.direct!==false, R = labels?(defs.length===1?56:100):14;
+  const W=opts.wide?1100:640, H=opts.h||(opts.wide?260:220), L=48, T=10, B=24, labels = defs.length<=4 && opts.direct!==false, R = labels?(defs.length===1?56:100):14;
   const all = defs.flatMap(d=>d.points);
   const xs = all.map(p=>t(p[0])), x0=Math.min(...xs), x1=Math.max(...xs, x0+DAY);
   let lo=Math.min(...all.map(p=>p[1])), hi=Math.max(...all.map(p=>p[1]));
@@ -306,6 +308,7 @@ function needWhy(source){
   const st = D.status[source] || {};
   if(source==="manual") return "무료 공개 API가 없는 자료라 관리자가 값을 입력하면 그래프로 표시됩니다.";
   if(source==="derived") return esc((D.sentiment&&D.sentiment.reason)||"구성 자료가 부족합니다.");
+  if(["cnn","dramx","pizzint"].includes(source) && st.status && st.status!=="ok") return `${esc(st.name||source)}에서 받지 못했습니다${ADMIN&&st.message?` — ${esc(st.message)}`:""}. 사이트가 막거나 화면 형식이 바뀐 경우입니다.`;
   if(source==="yahoo" && st.status!=="ok" && st.status!=="partial") return ADMIN ? `Yahoo Finance 연결이 꺼져 있거나 막혀 있습니다. <button class="linkbtn" data-goto="keys">API 키·자료 관리</button> 탭에서 켤 수 있습니다(비공식 경로).` : "Yahoo Finance 연결이 꺼져 있습니다(관리자 설정).";
   if(st.status==="not_configured") return ADMIN ? `<a href="#keys" data-goto="keys">API 키·자료 관리</a> 탭에서 ${esc(st.key)}를 등록하면 자동 수집됩니다.` : "관리자가 API 키를 등록하면 자동 수집됩니다.";
   if(st.status==="never") return "아직 수집하지 않았습니다. 첫 수집이 끝나면 표시됩니다.";
@@ -331,14 +334,15 @@ function panel(key, title, ids, opts={}){
   return `<div class="panel"><div class="ph"><h3>${esc(title)} <span class="muted small">${esc(unit)}${lastDate?` · 최근 ${lastDate}`:""}</span></h3>${hasAny?periodSelect(key, years, opts.def):""}</div>
     ${body}${opts.note?`<p class="note">${opts.note}</p>`:""}</div>`;
 }
-function manualPanel(group, title, note){
+function manualPanel(group, title, note, wide=true){
   const ids = manualIds(group);
   const help = esc((D.manual_help||{})[GROUP_PREFIX[group]||group]||"");
-  if(!ids.length) return `<div class="panel"><div class="ph"><h3>${esc(title)} <span class="muted small">관리자 입력</span></h3></div>${empty("관리자 입력 자료 없음", needWhy("manual") + (help?` 입력 형식: <span class="num">${help}</span>`:""))}<p class="note">${note}</p></div>`;
+  if(!ids.length) return `<div class="panel"><div class="ph"><h3>${esc(title)} <span class="muted small">${AUTO_SRC[group]?"자동 수집 + 관리자 입력":"관리자 입력"}</span></h3></div>${empty("아직 자료 없음", (AUTO_SRC[group]?needWhy(AUTO_SRC[group])+" 관리자가 직접 넣을 수도 있습니다.":needWhy("manual")) + (help?` 입력 형식: <span class="num">${help}</span>`:""))}<p class="note">${note}</p></div>`;
   const shown = ids.slice(0,4);
   const table = `<div class="tw"><table><thead><tr><th>항목</th><th class="r">최근 값</th><th>날짜</th><th class="r">1주 변화</th><th class="r">1개월 변화</th></tr></thead><tbody>${
     ids.map(i=>{ const s=S(i); return `<tr><td>${esc(s.name)}</td><td class="r num">${fmt(s.last[1],"",2)}</td><td class="num">${s.last[0]}</td><td class="r num">${chg(s.chg_1w?s.chg_1w.delta:null)}</td><td class="r num">${chg(s.chg_1m?s.chg_1m.delta:null)}</td></tr>`; }).join("")}</tbody></table></div>`;
-  return `${panel("m-"+group, title+" (관리자 입력)", shown, {table:false})}
+  const srcs = [...new Set(ids.map(i=>SRC_LABEL[S(i).source]||S(i).source))].join(" · ");
+  return `${panel("m-"+group, `${title} (${srcs})`, shown, {table:false, wide})}
     ${ids.length>4?`<p class="note">그래프는 앞의 4개 항목만 그립니다(색 구분 한계). 나머지 ${ids.length-4}개는 아래 표에서 보세요.</p>`:""}
     ${table}<p class="note">${note}</p>`;
 }
@@ -346,7 +350,7 @@ function manualPanel(group, title, note){
 // ---------- 탭 ----------
 const STATUS = {disabled:["꺼짐",""], ok:["정상","ok"], partial:["일부 실패","warn"], not_configured:["키 미등록","warn"], blocked:["접근 차단","bad"], error:["오류","bad"], never:["미수집",""]};
 const MROWS = {
-  global:[["eq.sp500","S&P 500","senti","pct"],["eq.nasdaq","나스닥 종합","senti","pct"],["eq.dow","다우존스","senti","pct"],["risk.vix","VIX","senti","abs"],["fx.dxy_broad","달러 지수(광의)","fx","pct"],["cmd.wti","WTI 원유","fx","pct"]],
+  global:[["eq.sp500","S&P 500","senti","pct"],["eq.nasdaq","나스닥 종합","senti","pct"],["eq.dow","다우존스","senti","pct"],["risk.vix","VIX","senti","abs"],["fx.dxy_broad","달러 지수(광의)","fx","pct"],["cmd.wti","WTI 원유","fx","pct"],["fng.cnn","CNN 공포·탐욕","senti","abs"]],
   kr:[["kr.kospi","코스피","markets","pct"],["kr.kosdaq","코스닥","markets","pct"],["y.samsung","삼성전자","markets","pct"],["y.hynix","SK하이닉스","markets","pct"]],
   futures:[["y.es","S&P 500 선물","markets","pct"],["y.nq","나스닥100 선물","markets","pct"],["y.sox","필라델피아 반도체","markets","pct"],["y.nvda","엔비디아","markets","pct"],["y.nikkei","닛케이 225","markets","pct"],["y.hsi","항셍","markets","pct"],["y.sse","상하이종합","markets","pct"],["y.gold","금 선물","markets","pct"],["y.btc","비트코인","markets","pct"],["y.usdjpy","달러/엔","markets","abs"]],
   rates:[["us.2y","미국 국채 2년","rates","bp"],["us.10y","미국 국채 10년","rates","bp"],["us.10y2y","미국 장단기 금리차","rates","bp"],["kr.base","한국 기준금리","rates","bp"],["kr.3y","국고채 3년","rates","bp"],["kr.10y","국고채 10년","rates","bp"],["fx.usdkrw","원/달러","fx","abs"],["credit.hy","미국 하이일드 스프레드","credit","bp"]]
@@ -359,7 +363,7 @@ function moveTxt(s, c, mode){
 }
 function mtable(title, rows){
   const body = rows.map(([sid,label,tab,mode])=>{ const s=S(sid);
-    if(!s || !s.last) return `<tr><td><button class="linkbtn" data-goto="${tab}">${esc(label)}</button></td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="muted small">${s&&s.source==="ecos"?"ECOS 키 필요":s&&s.source==="fred"?"FRED 키 필요":s&&s.source==="datagokr"?"공공데이터 키 필요":s&&s.source==="yahoo"?(D.yahoo?"수신 실패":"Yahoo 꺼짐"):"자료 없음"}</td></tr>`;
+    if(!s || !s.last) return `<tr><td><button class="linkbtn" data-goto="${tab}">${esc(label)}</button></td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="muted small">${s&&s.source==="yahoo"&&!D.yahoo?"Yahoo 꺼짐":"수신 전·실패"}</td></tr>`;
     return `<tr><td><button class="linkbtn" data-goto="${tab}">${esc(label)}</button></td><td class="r num">${fmt(s.last[1], s.unit)}${s.unit==="%"||s.unit==="%p"?"%":""}</td><td class="r num">${moveTxt(s,s.chg_1d,mode)}</td><td class="r num">${moveTxt(s,s.chg_1w,mode)}</td><td class="num small muted">${shortDate(s.last[0])}</td></tr>`; }).join("");
   return `<div class="panel"><div class="ph"><h3>${esc(title)}</h3></div><div class="tw"><table><thead><tr><th>지표</th><th class="r">최근 값</th><th class="r">전일 대비</th><th class="r">1주 대비</th><th>기준일</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
@@ -401,7 +405,8 @@ function briefText(){
   if(fu.length) L.push("· 선물·반도체: " + fu.join(" / "));
   const rt = [["미 10년물","us.10y","bp"],["국고채 3년","kr.3y","bp"],["원/달러","fx.usdkrw","abs"]].map(([n,id,m])=>{ const x=v(id,m); return x?`${n} ${x}`:null; }).filter(Boolean);
   if(rt.length) L.push("· 금리·환율: " + rt.join(" / "));
-  const vix = v("risk.vix","abs"); if(vix) L.push(`· VIX ${vix}`);
+  const vix = v("risk.vix","abs"), cnn = v("fng.cnn","abs");
+  if(vix || cnn) L.push("· 심리: " + [vix?`VIX ${vix}`:null, cnn?`CNN 공포·탐욕 ${cnn}`:null].filter(Boolean).join(" / "));
   const ipo = (D.ipo&&D.ipo.items||[]).filter(i=>i.today);
   if(ipo.length) L.push("· 오늘 공모주: " + ipo.map(i=>`${i.name} ${i.start===i.end?i.label:i.ends_today?i.label+" 마감":i.starts_today?i.label+" 시작":i.label+" 진행 중"}`).join(", "));
   const cal = (D.calendar||[]).filter(e=>e.date>=today).slice(0,4);
@@ -442,15 +447,15 @@ function tabMarkets(){
   const cell = ([k,id]) => { const m = S(id); return m ? panel("mk-"+k, m.name, [id]) : ""; };
   const pairs = [];
   for(let i=0;i<MARKET_PANELS.length;i+=2) pairs.push(`<div class="g2">${cell(MARKET_PANELS[i])}${MARKET_PANELS[i+1]?cell(MARKET_PANELS[i+1]):""}</div>`);
-  return `<p class="note">코스피·코스닥은 공공데이터포털(금융위원회, 공식)에서 영업일 하루 늦게 들어옵니다. 나머지는 관리자가 켠 경우에만 Yahoo Finance(비공식)에서 받으며, 장중에는 마지막 값이 확정 종가가 아닐 수 있습니다.</p>${pairs.join("")}`;
+  return `<p class="note">코스피·코스닥은 공공데이터포털 키가 있으면 금융위원회 공식 자료(영업일 하루 늦게)를, 없으면 Yahoo Finance 값을 씁니다. 나머지는 Yahoo Finance(비공식)에서 받으며, 장중에는 마지막 값이 확정 종가가 아닐 수 있습니다.</p>${pairs.join("")}`;
 }
 function yahooBox(){
   const on = !!D.yahoo, st = D.status.yahoo || {}; const [lab,cls] = STATUS[st.status]||["",""];
-  return `<div class="keybox"><div><b>Yahoo Finance</b> <span class="muted small">선택 · 비공식 경로 · 키 없음</span></div>
+  return `<div class="keybox"><div><b>Yahoo Finance</b> <span class="muted small">비공식 경로 · 키 없음</span></div>
     <div class="small">${on?`<span class="chip ok">켜짐</span>`:`<span class="chip">꺼짐</span>`} ${lab?` · 수집 상태 <span class="chip ${cls}">${lab}</span>`:""}</div>
     <div class="small muted">받는 자료: S&P 500·나스닥100 선물, 필라델피아 반도체, 엔비디아, 닛케이·항셍·상하이, 삼성전자·SK하이닉스, 금, 비트코인, 달러/엔</div>
-    <div class="small" style="color:var(--warn)">공식 API가 아니어서 예고 없이 막히거나 바뀔 수 있고, Yahoo 이용약관상 자동 수집이나 업무(상업적) 이용이 제한될 수 있습니다. 회사 업무에 쓰기 전 약관과 사내 규정을 준법감시 담당자와 확인하세요. 브라우저인 척 위장하지 않고 요청하므로 막히면 '접근 차단'으로 표시됩니다.</div>
-    <div class="keyrow">${on?`<button class="btn" data-yahoo="off">끄기</button>`:`<button class="btn pri" data-yahoo="on">켜고 수집</button>`}<span class="small" id="msg-yahoo" role="status">${esc(KEYMSG.yahoo?KEYMSG.yahoo[1]:"")}</span></div></div>`;
+    <div class="small muted">기본으로 켜져 있습니다. 공식 API가 아니라 예고 없이 막히거나 바뀔 수 있습니다. 공공데이터·FRED·ECOS 키가 없을 때는 코스피·코스닥·미국 지수·VIX·10년물·원/달러·유가도 여기서 대신 받습니다.</div>
+    <div class="keyrow">${on?`<button class="btn" data-yahoo="off">끄기</button>`:`<button class="btn pri" data-yahoo="on">다시 켜고 수집</button>`}<span class="small" id="msg-yahoo" role="status">${esc(KEYMSG.yahoo?KEYMSG.yahoo[1]:"")}</span></div></div>`;
 }
 function tabRates(){
   return `<div class="g2">${panel("us","미국 국채 금리",["us.2y","us.10y","us.30y"],{short:["2년","10년","30년"]})}
@@ -471,22 +476,23 @@ function tabSenti(){
     ${panel("fng","암호화폐 공포·탐욕 지수",["fng.crypto"],{fixed:[0,100],ticks:[0,25,50,75,100],dec:0, note:"alternative.me가 비트코인 변동성·거래량·소셜 지표로 계산하는 암호화폐 시장 지수입니다. 주식시장 지수가 아닙니다."})}</div>
     <div class="g2">${panel("vix","VIX 변동성 지수",["risk.vix"],{note:"S&P 500 옵션 가격에 반영된 향후 30일 기대 변동성. 보통 20 위면 불안, 30 위면 공포 국면으로 봅니다."})}
       ${panel("spx","S&P 500",["eq.sp500"])}</div>
-    <div class="panel">${manualPanel("sentiment","CNN 공포·탐욕 지수 등","CNN 지수는 공식 API가 없어 자동 수집하지 않습니다. 필요하면 CNN 화면 값을 관리자가 fng.CNN 시리즈로 입력하세요.")}</div>`;
+    <div class="g2">${panel("cnn","CNN 공포·탐욕 지수",["fng.cnn"],{fixed:[0,100],ticks:[0,25,50,75,100],dec:0, note:"CNN이 주가 모멘텀·변동성·풋콜 비율 등 7개 지표로 계산하는 미국 주식시장 심리 지수입니다(CNN 화면이 쓰는 공개 자료를 자동 수집, 비공식)."})}
+      <div class="panel">${manualPanel("sentiment","그 밖의 심리 지표","필요한 심리 지표를 fng. 으로 시작하는 이름으로 입력할 수 있습니다.", false)}</div></div>`;
 }
 function tabCredit(){
   return `<div class="panel">${manualPanel("cds","기업 CDS 프리미엄(bp)","CDS 프리미엄은 무료 공개 API가 없어 자동 수집하지 않습니다(블룸버그·리피니티브 등 유료). 증권사 단말·리포트 값을 입력하면 표시됩니다. 값이 클수록 시장이 보는 부도 위험이 큽니다.")}</div>
-    ${panel("spread","미국 회사채 스프레드(국채 대비)",["credit.hy","credit.ig"],{short:["하이일드","투자등급"], note:"자동 수집되는 신용 위험 참고 지표입니다(ICE BofA 옵션조정 스프레드). 넓어지면 기업 자금 조달 여건이 나빠졌다는 뜻입니다."})}`;
+    ${panel("spread","미국 회사채 스프레드(국채 대비)",["credit.hy","credit.ig"],{short:["하이일드","투자등급"], wide:true, note:"자동 수집되는 신용 위험 참고 지표입니다(ICE BofA 옵션조정 스프레드). 넓어지면 기업 자금 조달 여건이 나빠졌다는 뜻입니다."})}`;
 }
 function tabSemi(){
-  return `<div class="panel">${manualPanel("dram","DRAM 가격($)","DRAMeXchange(TrendForce)의 현물·고정거래 가격은 유료·회원 자료라 자동 수집하지 않습니다. 공개 기사·리포트의 값을 출처와 함께 입력하세요.")}</div>
-    ${panel("ppi","미국 반도체 생산자물가지수(월)",["semi.ppi"],{def:"5y", note:"DRAM 가격 자체가 아니라 미국 반도체 제조업 출하가격 지수입니다. 업황 흐름 참고용."})}`;
+  return `<div class="panel">${manualPanel("dram","DRAM 가격($)","DRAMeXchange 첫 화면의 DDR 현물가(Session Average)를 매일 자동으로 쌓습니다. 사이트가 과거 값을 주지 않아 수집을 시작한 날부터 그래프가 이어집니다. 고정거래가는 유료 자료라 필요하면 관리자가 dram. 이름으로 입력하세요.")}</div>
+    ${panel("ppi","미국 반도체 생산자물가지수(월)",["semi.ppi"],{def:"5y", wide:true, note:"DRAM 가격 자체가 아니라 미국 반도체 제조업 출하가격 지수입니다. 업황 흐름 참고용."})}`;
 }
 function tabFx(){
   return `<div class="g2">${panel("krw","원/달러 환율",["fx.usdkrw"])}${panel("dxy","달러 지수(무역가중, 광의)",["fx.dxy_broad"])}</div>
-    <div class="g2">${panel("wti","WTI 원유($/배럴)",["cmd.wti"])}<div class="panel">${manualPanel("custom","기타 지표","금 가격 등 필요한 지표를 custom. 으로 시작하는 이름으로 입력하세요.")}</div></div>`;
+    <div class="g2">${panel("wti","WTI 원유($/배럴)",["cmd.wti"])}<div class="panel">${manualPanel("custom","기타 지표","금 가격 등 필요한 지표를 custom. 으로 시작하는 이름으로 입력하세요.", false)}</div></div>`;
 }
 function tabPizza(){
-  return `<div class="panel">${manualPanel("pizza","펜타곤 피자 지수","미국 국방부 주변 피자 가게의 구글 지도 혼잡도를 근거로 한 민간 관측 지표(pizzint.watch 등)입니다. 공식 API가 없고 검증된 예측 지표가 아니므로 재미·참고용으로만 보세요.")}</div>`;
+  return `<div class="panel">${manualPanel("pizza","펜타곤 피자 지수","PizzINT(pizzint.watch)의 DOUGHCON 단계(1~5)를 매일 자동으로 쌓습니다. 미국 국방부 주변 피자 가게 혼잡도를 근거로 한 민간 관측 지표로, 검증된 예측 지표가 아니므로 재미·참고용으로만 보세요.")}</div>`;
 }
 function tabAI(){
   const u = D.usage || {daily:[], models:[], total:{}};
@@ -511,8 +517,8 @@ function tabAI(){
 }
 const KEY_SRC = {ECOS_API_KEY:"ecos", FRED_API_KEY:"fred", DATA_GO_KR_KEY:"datagokr"};
 const KEY_HELP = {DATA_GO_KR_KEY:["공공데이터포털(금융위원회 지수시세)","https://www.data.go.kr/data/15094807/openapi.do","data.go.kr → 금융위원회_지수시세정보 활용신청(무료)","코스피·코스닥 지수(2020년 이후, 영업일 하루 늦게 반영). 일반 인증키(Decoding)·(Encoding) 둘 다 됩니다"],
-ECOS_API_KEY:["한국은행 ECOS","https://ecos.bok.or.kr/api/","ecos.bok.or.kr/api → 인증키 신청(무료)","한국 기준금리·국고채 3/10/30년·원/달러"],
-                  FRED_API_KEY:["FRED(미국 세인트루이스 연준)","https://fredaccount.stlouisfed.org/apikeys","fredaccount.stlouisfed.org → API Keys(무료)","미국 금리·국채·회사채 스프레드·VIX·S&P 500·달러·유가"]};
+ECOS_API_KEY:["한국은행 ECOS","https://ecos.bok.or.kr/api/","ecos.bok.or.kr/api → 인증키 신청(무료)","한국 기준금리·국고채 3/10/30년·원/달러. 키가 없으면 공개 샘플 키로 최근 값만 받습니다"],
+                  FRED_API_KEY:["FRED(미국 세인트루이스 연준)","https://fredaccount.stlouisfed.org/apikeys","fredaccount.stlouisfed.org → API Keys(무료)","미국 금리·국채·회사채 스프레드·VIX·S&P 500·달러·유가. 키가 없어도 공개 CSV로 받고, 키를 등록하면 경제지표 발표 일정까지 받습니다"]};
 function keyCard(){
   const ks = D.keys||[];
   const src = {dashboard:"이 화면에서 등록", env:"서버 환경변수"};
@@ -550,7 +556,7 @@ function tabKeys(){
     <div class="keyrow"><button class="btn" id="btn-refresh2">지금 다시 수집</button><span class="small muted">${(D.refresh||{}).running?"수집 중…":""}</span></div>`;
 }
 const TAB_FN = {morning:tabMorning, markets:tabMarkets, rates:tabRates, senti:tabSenti, credit:tabCredit, semi:tabSemi, fx:tabFx, pizza:tabPizza, ai:tabAI, keys:tabKeys};
-const TAB_SRC = {morning:"FRED · 한국은행 ECOS · 공공데이터포털 · IPO Radar · Yahoo Finance(선택)", markets:"공공데이터포털(코스피·코스닥) · Yahoo Finance(선택, 비공식)", rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"관리자 입력 · FRED(미국 노동통계국)", fx:"한국은행 ECOS · FRED", pizza:"관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
+const TAB_SRC = {morning:"FRED · 한국은행 ECOS · 공공데이터포털 · Yahoo Finance · CNN · IPO Radar", markets:"공공데이터포털·Yahoo Finance", rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · CNN · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"DRAMeXchange 자동 · FRED · 관리자 입력", fx:"한국은행 ECOS · FRED", pizza:"PizzINT 자동 · 관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
 
 // ---------- 화면 ----------
 function header(){
@@ -637,7 +643,6 @@ document.addEventListener("click", async e=>{
     const r = await post("/api/macro/refresh"); await load(true); flash(r.message || "최신 자료로 다시 불러왔습니다");
     if(r.started) startPoll(); return; }
   if(b.dataset.yahoo){ const on = b.dataset.yahoo==="on";
-    if(on && !confirm("Yahoo Finance는 공식 API가 아닙니다. 이용약관·사내 규정을 확인하셨나요? 켜면 바로 수집합니다.")) return;
     b.disabled = true; const r = await post("/admin/macro-yahoo", {on});
     KEYMSG.yahoo = ["", r.message||""]; await load(true); if(r.refresh_started) startPoll(); return; }
   if(b.id==="btn-refresh" || b.id==="btn-refresh2"){ b.disabled = true;
