@@ -11,7 +11,7 @@ COPY ipo_radar ./ipo_radar
 COPY dashboard/template.html dashboard/macro.html dashboard/brand_logo.png ./dashboard/
 COPY data/seed ./data/seed
 COPY data/manual_inputs ./data/manual_inputs
-COPY data/brand.json ./data/brand.json
+COPY data/brand.json data/macro_events.json ./data/
 RUN useradd --system --uid 10001 ipo && mkdir -p /var/lib/ipo-radar/www && chown -R ipo /var/lib/ipo-radar
 USER ipo
 VOLUME ["/var/lib/ipo-radar"]

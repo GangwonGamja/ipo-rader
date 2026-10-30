@@ -465,6 +465,7 @@ def make_handler(app):
                 finally:
                     conn.close()
                 body["role"] = role
+                body["ipo"] = ipo_week(app)
                 if not admin:  # 이용자에게는 오류 상세·키 이름을 보내지 않는다
                     for st in body["status"].values():
                         st.pop("message", None)
@@ -647,6 +648,32 @@ a.m b{{font-size:17px}}a.m span{{font-size:14px;line-height:1.6;color:var(--sub)
 <header><div class="in">{logo}<span class="br">{branch}</span><span class="sp"></span>{chip}<a class="out" href="/logout">로그아웃</a></div></header>
 <main><h1>종합 대시보드</h1><p class="lead">볼 화면을 고르세요. 각 화면 위쪽의 ‘← 메뉴’로 이 화면에 돌아옵니다.</p>
 <nav class="grid" aria-label="대시보드 메뉴">{items}</nav></main></html>"""
+
+
+def ipo_week(app, today=None, days: int = 7) -> dict:
+    """아침 브리핑용: 오늘부터 days일 안에 걸친 공모주 일정(예시 데이터 제외)."""
+    today = today or datetime.now(config.KST).date()
+    hi = (today + timedelta(days=days)).isoformat()
+    lo = today.isoformat()
+    try:
+        data = json.loads((app["out"] / "data_view.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "items": []}
+    comp = {c["uid"]: c for c in data.get("companies", [])}
+    items = []
+    for ev in data.get("calendar", []):
+        if ev.get("is_sample"):
+            continue
+        st, en = ev.get("start"), ev.get("end") or ev.get("start")
+        if not st or en < lo or st > hi:
+            continue
+        c = comp.get(ev["uid"], {})
+        items.append({"uid": ev["uid"], "name": ev["name"], "label": ev.get("label"), "start": st, "end": en,
+                      "today": st <= lo <= en, "ends_today": en == lo, "starts_today": st == lo,
+                      "underwriters": c.get("underwriters"), "price_final": c.get("price_final"),
+                      "price_band": c.get("price_band"), "kind": ev.get("kind")})
+    items.sort(key=lambda x: (x["start"], x["name"]))
+    return {"available": True, "items": items, "generated_at": (data.get("meta") or {}).get("generated_at")}
 
 
 def macro_page(app, role: str) -> str:

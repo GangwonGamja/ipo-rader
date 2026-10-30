@@ -1,0 +1,11 @@
+{
+  "_note": "중앙은행 회의 등 주요 일정. 확인한 출처와 확인 여부를 함께 적는다. verified=false 는 화면에 '확인 필요'로 표시된다.",
+  "events": [
+    {"date": "2026-11-26", "name": "한국은행 금융통화위원회 통화정책방향 결정회의",
+     "source": "토스뱅크 금리 일정 정리(2026-07-14 작성) — 한국은행 공식 일정표 미확인", "url": "https://www.tossbank.com/articles/baserate2601",
+     "verified": false, "note": "한국은행 홈페이지(bok.or.kr) 금융통화위원회 일정에서 확인 필요"},
+    {"date": "2026-12-09", "name": "FOMC 정책금리 결정(12월 8~9일 회의, 미 동부 14:00 발표)",
+     "source": "Federal Reserve Board 2026년 12월 일정", "url": "https://www.federalreserve.gov/newsevents/2026-december.htm",
+     "verified": true, "note": "한국 시간으로는 다음 날 새벽"}
+  ]
+}

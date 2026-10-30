@@ -16,6 +16,7 @@
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
   --fear-2:#d95926; --fear-1:#f2a27e; --mid:#d6d2cc; --greed-1:#86b6ef; --greed-2:#256abf;
   --grid:#ece7e1; --axis:#cfc4b8;
+  --up:#c8281e; --down:#1f5fbf;
   --f-num:"Roboto Mono",ui-monospace,Consolas,monospace; --r:6px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -26,6 +27,7 @@
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
   --fear-2:#d95926; --fear-1:#8f4a2c; --mid:#4a423d; --greed-1:#2c5a92; --greed-2:#5598e7;
   --grid:#2c2521; --axis:#4a3e37;
+  --up:#ff7b72; --down:#6ea8ff;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -35,6 +37,7 @@
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
   --fear-2:#d95926; --fear-1:#8f4a2c; --mid:#4a423d; --greed-1:#2c5a92; --greed-2:#5598e7;
   --grid:#2c2521; --axis:#4a3e37;
+  --up:#ff7b72; --down:#6ea8ff;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-size:14px;line-height:1.5}
@@ -68,7 +71,7 @@ section.card{background:var(--surface);border:1px solid var(--line);border-radiu
 .cb{padding:12px 16px 16px;display:grid;gap:14px}
 .cb>*,.g2>*{min-width:0}
 .g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
-.panel{display:grid;gap:6px;min-width:0}
+.panel{display:grid;gap:6px;min-width:0;align-content:start}
 .panel h3{font-size:13.5px;margin:0}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-2)}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
@@ -113,7 +116,22 @@ button.kpi:hover{border-color:var(--brand-2)}button.kpi:focus-visible{outline:2p
 .keyrow input{flex:1;min-width:200px;font:inherit;font-family:var(--f-num);padding:8px 10px;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);color:var(--ink)}
 .keyrow input:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
 a{color:var(--brand-2)}
-@media (max-width:640px){.hin h1{border-left:0;padding-left:0;width:100%}.kpi .val{font-size:20px}}
+.up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--ink-2)}
+.ud{font-size:12px;color:var(--ink-2);display:flex;gap:12px;flex-wrap:wrap}
+.mhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.mhead b{font-size:17px}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.checks li{display:flex;gap:8px;align-items:baseline;font-size:13.5px;border-left:3px solid var(--line-strong);padding:4px 10px;background:var(--surface-2);border-radius:0 4px 4px 0}
+.checks li.warn{border-left-color:var(--warn)}.checks li.bad{border-left-color:var(--bad)}.checks li.info{border-left-color:var(--s1)}
+.lst{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.lst li{display:grid;grid-template-columns:132px 1fr;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.lst li .d{font-family:var(--f-num);font-size:12.5px;color:var(--ink-2)}
+.todo{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.todo label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;cursor:pointer}
+.todo input{margin-top:3px;width:16px;height:16px;accent-color:var(--brand)}
+.linkbtn{font:inherit;border:0;background:none;padding:0;color:var(--ink);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+.linkbtn:hover{color:var(--brand-2)}
+@media (max-width:640px){.lst li{grid-template-columns:1fr;gap:2px}.hin h1{border-left:0;padding-left:0;width:100%}.kpi .val{font-size:20px}}
 @media print{header .btn,.seg,#tip{display:none}}
 </style>
 </head>
@@ -130,13 +148,13 @@ const store = { get(k,d){ try{ const v=localStorage.getItem("macro:"+k); return 
                 set(k,v){ try{ localStorage.setItem("macro:"+k, JSON.stringify(v)); }catch(e){} } };
 const PERIODS = [["1m","최근 1개월",31],["3m","최근 3개월",92],["6m","최근 6개월",183],["1y","최근 1년",366],["3y","최근 3년",1096],["5y","최근 5년",1827],["10y","최근 10년",3653],["all","전체",null]];
 const COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
-const TABS = [["overview","개요"],["rates","금리·국채"],["senti","시장 심리"],["credit","신용·CDS"],["semi","반도체·DRAM"],["fx","환율·유가"],["pizza","피자 지수"],["ai","AI 토큰"],["keys", ADMIN?"API 키·자료 관리":"자료 상태"]];
+const TABS = [["morning","아침 브리핑"],["rates","금리·국채"],["senti","시장 심리"],["credit","신용·CDS"],["semi","반도체·DRAM"],["fx","환율·유가"],["pizza","피자 지수"],["ai","AI 토큰"],["keys", ADMIN?"API 키·자료 관리":"자료 상태"]];
 const KEYMSG = {};
 const PTS = {};                    // 그래프 점(탭을 열 때 필요한 지표만 받아 둠)
 const PER = store.get("per", {});  // 그래프별 기간
 let D = null, POLL = null;
-let TAB = (location.hash||"").slice(1) || store.get("tab","overview");
-if(!TABS.some(x=>x[0]===TAB)) TAB = "overview";
+let TAB = (location.hash||"").slice(1) || store.get("tab","morning");
+if(!TABS.some(x=>x[0]===TAB)) TAB = "morning";
 const CHARTS = [];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -147,6 +165,17 @@ function dec(unit){ return unit==="원"?1 : unit==="0~100"||unit==="bp"?0 : unit
 function fmt(v, unit, d){ if(v==null||!isFinite(v)) return "–"; if(Math.abs(v)<1e-9) v = 0; const k = d ?? dec(unit); return Number(v).toLocaleString("ko-KR",{minimumFractionDigits:k, maximumFractionDigits:k}); }
 function sgn(v, k=2){ if(v==null||!isFinite(v)) return "–"; if(Math.abs(v)<1e-9) v = 0; const s = Number(v).toLocaleString("ko-KR",{minimumFractionDigits:k,maximumFractionDigits:k}); return v>0?"+"+s : v<0? s.replace("-","−") : s; }
 function kst(isoStr){ if(!isoStr) return "–"; const d=new Date(isoStr); if(isNaN(d)) return esc(isoStr); return d.toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}); }
+/* 증감: 국내 관례대로 상승 빨강 ▲, 하락 파랑 ▼ (색만으로 구분하지 않게 화살표 함께) */
+function chg(delta, k=2, suffix=""){
+  if(delta==null || !isFinite(delta)) return `<span class="flat">–</span>`;
+  const r = Math.round(delta*Math.pow(10,k))/Math.pow(10,k);
+  if(r===0) return `<span class="flat">0${suffix}</span>`;
+  const txt = Math.abs(r).toLocaleString("ko-KR",{minimumFractionDigits:k,maximumFractionDigits:k});
+  return r>0 ? `<span class="up">▲ ${txt}${suffix}</span>` : `<span class="down">▼ ${txt}${suffix}</span>`;
+}
+function todayKST(){ return new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Seoul"}); }
+const DOW = ["일","월","화","수","목","금","토"];
+function dayLabel(d){ const x = new Date(d+"T00:00:00Z"); return `${d.slice(5).replace("-","/")}(${DOW[x.getUTCDay()]})`; }
 function shortDate(d){ return d && d.slice(0,4)===String(new Date().getFullYear()) ? d.slice(5).replace("-","/") : d; }
 function valueAt(points, targetMs){ let best=null; for(const p of points){ if(t(p[0])<=targetMs) best=p; else break; } return best; }
 
@@ -306,7 +335,7 @@ function manualPanel(group, title, note){
   if(!ids.length) return `<div class="panel"><div class="ph"><h3>${esc(title)} <span class="muted small">관리자 입력</span></h3></div>${empty("관리자 입력 자료 없음", needWhy("manual") + (help?` 입력 형식: <span class="num">${help}</span>`:""))}<p class="note">${note}</p></div>`;
   const shown = ids.slice(0,4);
   const table = `<div class="tw"><table><thead><tr><th>항목</th><th class="r">최근 값</th><th>날짜</th><th class="r">1주 변화</th><th class="r">1개월 변화</th></tr></thead><tbody>${
-    ids.map(i=>{ const s=S(i); return `<tr><td>${esc(s.name)}</td><td class="r num">${fmt(s.last[1],"",2)}</td><td class="num">${s.last[0]}</td><td class="r num">${s.chg_1w?sgn(s.chg_1w.delta):"–"}</td><td class="r num">${s.chg_1m?sgn(s.chg_1m.delta):"–"}</td></tr>`; }).join("")}</tbody></table></div>`;
+    ids.map(i=>{ const s=S(i); return `<tr><td>${esc(s.name)}</td><td class="r num">${fmt(s.last[1],"",2)}</td><td class="num">${s.last[0]}</td><td class="r num">${chg(s.chg_1w?s.chg_1w.delta:null)}</td><td class="r num">${chg(s.chg_1m?s.chg_1m.delta:null)}</td></tr>`; }).join("")}</tbody></table></div>`;
   return `${panel("m-"+group, title+" (관리자 입력)", shown, {table:false})}
     ${ids.length>4?`<p class="note">그래프는 앞의 4개 항목만 그립니다(색 구분 한계). 나머지 ${ids.length-4}개는 아래 표에서 보세요.</p>`:""}
     ${table}<p class="note">${note}</p>`;
@@ -314,30 +343,79 @@ function manualPanel(group, title, note){
 
 // ---------- 탭 ----------
 const STATUS = {ok:["정상","ok"], partial:["일부 실패","warn"], not_configured:["키 미등록","warn"], blocked:["접근 차단","bad"], error:["오류","bad"], never:["미수집",""]};
-function kpi(label, id, tab, opts={}){
-  const s = S(id);
-  const go = `data-goto="${tab}"`;
-  if(!s || !s.last) return `<button class="kpi" ${go}><span class="lab">${esc(label)}</span><span class="val">–</span><span class="det">${s&&s.source==="ecos"?"ECOS 키 필요":s&&s.source==="fred"?"FRED 키 필요":"자료 없음"}</span></button>`;
-  const w = s.chg_1w, k = opts.dec ?? dec(s.unit);
-  const dtxt = w ? `1주 ${sgn(w.delta, k)}` : "1주 변화 –";
-  return `<button class="kpi" ${go}><span class="lab">${esc(label)}</span><span class="val">${fmt(s.last[1], s.unit, k)}<small>${esc(opts.unit ?? s.unit)}</small></span><span class="det">${dtxt} · ${shortDate(s.last[0])}</span></button>`;
+const MROWS = {
+  global:[["eq.sp500","S&P 500","senti","pct"],["eq.nasdaq","나스닥 종합","senti","pct"],["eq.dow","다우존스","senti","pct"],["risk.vix","VIX","senti","abs"],["fx.dxy_broad","달러 지수(광의)","fx","pct"],["cmd.wti","WTI 원유","fx","pct"]],
+  rates:[["us.2y","미국 국채 2년","rates","bp"],["us.10y","미국 국채 10년","rates","bp"],["us.10y2y","미국 장단기 금리차","rates","bp"],["kr.base","한국 기준금리","rates","bp"],["kr.3y","국고채 3년","rates","bp"],["kr.10y","국고채 10년","rates","bp"],["fx.usdkrw","원/달러","fx","abs"],["credit.hy","미국 하이일드 스프레드","credit","bp"]]
+};
+function moveTxt(s, c, mode){
+  if(!c || !s.last) return chg(null);
+  if(mode==="bp") return chg(c.delta*100, 0, "bp");
+  if(mode==="pct"){ const base = s.last[1]-c.delta; return base ? chg(c.delta/base*100, 2, "%") : chg(null); }
+  return chg(c.delta, dec(s.unit));
 }
-function tabOverview(){
-  const krBase = S("kr.base"), usF = S("us.ffr");
-  const gap = krBase&&krBase.last&&usF&&usF.last ? krBase.last[1]-usF.last[1] : null;
+function mtable(title, rows){
+  const body = rows.map(([sid,label,tab,mode])=>{ const s=S(sid);
+    if(!s || !s.last) return `<tr><td><button class="linkbtn" data-goto="${tab}">${esc(label)}</button></td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="muted small">${s&&s.source==="ecos"?"ECOS 키 필요":s&&s.source==="fred"?"FRED 키 필요":"자료 없음"}</td></tr>`;
+    return `<tr><td><button class="linkbtn" data-goto="${tab}">${esc(label)}</button></td><td class="r num">${fmt(s.last[1], s.unit)}${s.unit==="%"||s.unit==="%p"?"%":""}</td><td class="r num">${moveTxt(s,s.chg_1d,mode)}</td><td class="r num">${moveTxt(s,s.chg_1w,mode)}</td><td class="num small muted">${shortDate(s.last[0])}</td></tr>`; }).join("");
+  return `<div class="panel"><div class="ph"><h3>${esc(title)}</h3></div><div class="tw"><table><thead><tr><th>지표</th><th class="r">최근 값</th><th class="r">전일 대비</th><th class="r">1주 대비</th><th>기준일</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+function ipoBlock(){
+  const ipo = D.ipo || {items:[]}, today = todayKST();
+  if(!ipo.available) return empty("공모주 일정을 불러오지 못했습니다","IPO Radar 수집이 끝나면 표시됩니다.");
+  if(!ipo.items.length) return empty("오늘부터 7일 안에 잡힌 공모주 일정이 없습니다","일정 미정 기업은 IPO Radar 화면에서 확인하세요.");
+  const tag = it => it.start===it.end && it.today ? `오늘 ${esc(it.label)}` : it.ends_today ? `${esc(it.label)} 마감(오늘)` : it.starts_today ? `${esc(it.label)} 시작(오늘)` : it.today ? `${esc(it.label)} 진행 중` : esc(it.label);
+  return `<ul class="lst">${ipo.items.map(it=>`<li><span class="d">${it.start===it.end?dayLabel(it.start):`${dayLabel(it.start)}~${it.end.slice(5).replace("-","/")}`}</span>
+    <span>${it.today?`<span class="chip warn">${tag(it)}</span>`:`<span class="chip">${tag(it)}</span>`} <b>${esc(it.name)}</b>${it.underwriters?` <span class="muted small">${esc(it.underwriters)}</span>`:""}${it.price_final?` <span class="small num">확정 ${Number(it.price_final).toLocaleString()}원</span>`:it.price_band?` <span class="small num muted">희망 ${Number(it.price_band.low).toLocaleString()}~${Number(it.price_band.high).toLocaleString()}원</span>`:""}</span></li>`).join("")}</ul>
+    <p class="note"><a href="/ipo">IPO Radar에서 자세히 보기 →</a> 일정은 공시·수집 기준이며 변경될 수 있습니다.</p>`;
+}
+function calBlock(){
+  const cal = D.calendar || [];
+  const fredOn = (D.status.fred||{}).status;
+  if(!cal.length) return empty("앞으로 2주 안의 등록된 일정이 없습니다", fredOn==="not_configured" ? "FRED 키를 등록하면 미국 주요 경제지표 발표 일정이 자동으로 들어옵니다." : "미국 주요 지표 발표일(FRED)과 중앙은행 회의 일정을 표시합니다.");
+  return `<ul class="lst">${cal.map(e=>`<li><span class="d">${dayLabel(e.date)}</span><span>${esc(e.name)} ${e.verified?"":`<span class="chip warn" title="${esc(e.note||"")}">확인 필요</span>`}
+    <br><span class="small muted">${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.source)}</a>`:esc(e.source)}${e.note?` · ${esc(e.note)}`:""}</span></span></li>`).join("")}</ul>
+    <p class="note">미국 지표 날짜는 FRED 공표일(미국 날짜) 기준이라 한국 시간으로는 대개 그날 밤이나 다음 날 새벽입니다.</p>`;
+}
+const TODO = ["전일 미국 증시·금리·환율 움직임 확인(위 표)","오늘 청약 시작·마감 종목과 증거금·마감 시간 확인","오늘 상장·환불 종목 보유 고객 확인","이번 주 경제지표·중앙은행 일정 확인","고객 안내용 시장 요약 준비(오른쪽 위 ‘요약 복사’)"];
+function todoBlock(){
+  const key = "todo:"+todayKST(), st = store.get(key, {});
+  return `<ul class="todo">${TODO.map((t,i)=>`<li><label><input type="checkbox" data-todo="${i}" ${st[i]?"checked":""}> <span>${esc(t)}</span></label></li>`).join("")}</ul>
+    <p class="note">체크 표시는 이 브라우저에만 저장되고 날짜가 바뀌면 새로 시작합니다.</p>`;
+}
+function briefText(){
+  const L = [], today = todayKST();
+  const v = (sid, mode) => { const s=S(sid); if(!s||!s.last) return null; const c=s.chg_1d;
+    let m = ""; const flat = c && Math.abs(mode==="bp"?c.delta*100:mode==="pct"?c.delta/(s.last[1]-c.delta||1)*100:c.delta) < (mode==="bp"?0.5:0.005);
+    if(c && flat) m = "보합"; else if(c){ if(mode==="pct"){ const b=s.last[1]-c.delta; if(b) m = `${c.delta>=0?"▲":"▼"}${Math.abs(c.delta/b*100).toFixed(2)}%`; } else if(mode==="bp"){ m = `${c.delta>=0?"▲":"▼"}${Math.abs(c.delta*100).toFixed(0)}bp`; } else { m = `${c.delta>=0?"▲":"▼"}${Math.abs(c.delta).toFixed(dec(s.unit))}`; } }
+    return `${fmt(s.last[1], s.unit)}${s.unit==="%"?"%":s.unit==="원"?"원":""}${m?` (${m})`:""}`; };
+  L.push(`[아침 시장 체크] ${dayLabel(today)}`);
+  const us = [["S&P 500","eq.sp500","pct"],["나스닥","eq.nasdaq","pct"],["다우","eq.dow","pct"]].map(([n,id,m])=>{ const x=v(id,m); return x?`${n} ${x}`:null; }).filter(Boolean);
+  if(us.length) L.push("· 미국 증시: " + us.join(" / "));
+  const rt = [["미 10년물","us.10y","bp"],["국고채 3년","kr.3y","bp"],["원/달러","fx.usdkrw","abs"]].map(([n,id,m])=>{ const x=v(id,m); return x?`${n} ${x}`:null; }).filter(Boolean);
+  if(rt.length) L.push("· 금리·환율: " + rt.join(" / "));
+  const vix = v("risk.vix","abs"); if(vix) L.push(`· VIX ${vix}`);
+  const ipo = (D.ipo&&D.ipo.items||[]).filter(i=>i.today);
+  if(ipo.length) L.push("· 오늘 공모주: " + ipo.map(i=>`${i.name} ${i.start===i.end?i.label:i.ends_today?i.label+" 마감":i.starts_today?i.label+" 시작":i.label+" 진행 중"}`).join(", "));
+  const cal = (D.calendar||[]).filter(e=>e.date>=today).slice(0,4);
+  if(cal.length) L.push("· 주요 일정: " + cal.map(e=>`${e.date.slice(5).replace("-","/")} ${e.name}${e.verified?"":"(확인 필요)"}`).join(", "));
+  L.push("※ 공개 자료 기준 참고용이며 투자 권유가 아닙니다. 지표마다 기준일이 다를 수 있습니다.");
+  return L.join("\n");
+}
+function tabMorning(){
+  const today = todayKST();
+  const checks = D.checks || [];
   const anyData = Object.values(D.series).some(s=>s.last);
-  const st = Object.values(D.status).map(s=>{ const [lab,cls]=STATUS[s.status]||[s.status,""]; return `<span class="chip ${cls}">${esc(s.name.split(" ")[0])} ${lab}</span>`; }).join(" ");
-  const sen = D.sentiment||{};
-  return `${!anyData?`<div class="banner"><b>아직 수집된 지표가 없습니다.</b><span>${ADMIN?`<a href="#keys" data-goto="keys">API 키·자료 관리</a> 탭에서 ECOS·FRED 키를 등록하면`:"관리자가 ECOS·FRED API 키를 등록하면"} 금리·국채·환율·VIX 등을 자동으로 받습니다. 두 키 모두 무료 발급입니다.</span></div>`:""}
-  <p class="note">타일을 누르면 해당 메뉴로 이동합니다.</p>
-  <div class="kpis">
-    ${kpi("미국 국채 10년","us.10y","rates")}${kpi("국고채 3년","kr.3y","rates",{dec:3})}${kpi("한국 기준금리","kr.base","rates")}${kpi("미국 기준금리(실효)","us.ffr","rates")}
-    <button class="kpi" data-goto="rates"><span class="lab">한·미 금리차</span><span class="val">${gap!=null?sgn(gap,2):"–"}<small>%p</small></span><span class="det">한국 기준금리 − 미국 실효금리</span></button>
-    ${kpi("원/달러","fx.usdkrw","fx",{unit:"원"})}${kpi("VIX","risk.vix","senti")}${kpi("하이일드 스프레드","credit.hy","credit")}
-    <button class="kpi" data-goto="senti"><span class="lab">시장 심리(자체)</span><span class="val">${sen.available?fmt(sen.value,"",0):"–"}</span><span class="det">${sen.available?esc(sen.label):"산출 불가"}</span></button>
-    ${kpi("암호화폐 공포·탐욕","fng.crypto","senti")}${kpi("WTI 원유","cmd.wti","fx")}${kpi("미국 장단기 금리차","us.10y2y","rates")}
-  </div>
-  <div class="bar"><span>자료원</span>${st}</div>`;
+  return `<div class="mhead"><div><b>${dayLabel(today)} 아침 체크</b><div class="small muted">지표마다 기준일이 다릅니다. 미국 지표는 보통 한국 시간 전날 밤 마감 값입니다.</div></div>
+      <button class="btn pri" id="copy-brief">고객 안내용 요약 복사</button></div>
+    <div class="ud"><span><span class="up">▲ 빨강</span> 상승</span><span><span class="down">▼ 파랑</span> 하락</span><span>좋고 나쁨이 아니라 방향만 표시합니다.</span></div>
+    ${!anyData?`<div class="banner"><b>아직 수집된 지표가 없습니다.</b><span>${ADMIN?`<button class="linkbtn" data-goto="keys">API 키·자료 관리</button> 탭에서 ECOS·FRED 키를 등록하면`:"관리자가 ECOS·FRED API 키를 등록하면"} 자동으로 채워집니다(무료 발급).</span></div>`:""}
+    <section class="sub"><h3>체크 포인트 <span class="muted small">정해진 기준을 넘은 움직임만 자동 표시 · 해석이나 전망이 아닙니다</span></h3>
+      ${checks.length?`<ul class="checks">${checks.map(c=>`<li class="${c.level}"><span>${c.level==="bad"?"⚠":c.level==="warn"?"!":"ℹ"}</span><span>${esc(c.text)} <span class="muted small num">${shortDate(c.date)}</span></span></li>`).join("")}</ul>`
+        :`<p class="note">${anyData?"기준을 넘은 큰 움직임이 없습니다.":"지표가 수집되면 표시됩니다."} 기준: 미국 지수 ±1.5%(나스닥 ±2%), VIX 20·30, 금리 ±10bp, 원/달러 ±10원, 하이일드 스프레드 1주 +30bp, 장단기 금리 역전, 암호화폐 지수 20 이하·80 이상.</p>`}</section>
+    <div class="g2">${mtable("해외 증시·위험 지표", MROWS.global)}${mtable("금리·환율·신용", MROWS.rates)}</div>
+    <div class="g2"><div class="panel"><div class="ph"><h3>오늘·이번 주 공모주</h3></div>${ipoBlock()}</div>
+      <div class="panel"><div class="ph"><h3>경제지표·중앙은행 일정 <span class="muted small">지표 2주 · 회의 60일</span></h3></div>${calBlock()}</div></div>
+    <section class="sub"><h3>PB 아침 체크리스트</h3>${todoBlock()}</section>`;
 }
 function bondTable(){
   const rows = [["us.2y","미국 2년"],["us.10y","미국 10년"],["us.30y","미국 30년"],["kr.3y","국고채 3년"],["kr.10y","국고채 10년"],["kr.30y","국고채 30년"]];
@@ -345,7 +423,7 @@ function bondTable(){
   const body = rows.map(([k,label])=>{ const b = D.bonds[k];
     if(!b || !b.date) return `<tr><td>${label}</td><td class="r">–</td>${cols.map(()=>`<td class="r">–</td>`).join("")}</tr>`;
     return `<tr><td>${label} <span class="muted small num">${b.date}</span></td><td class="r num">${fmt(b.yield,"%",3)}%</td>${cols.map(([c])=>{ const m=b.moves[c];
-      return m?`<td class="r num" title="${m.from} 대비">${sgn(m.bp,1)}bp<br><span class="muted">가격 ${sgn(m.price_pct,2)}%</span></td>`:`<td class="r">–</td>`; }).join("")}</tr>`; }).join("");
+      return m?`<td class="r num" title="${m.from} 대비">${chg(m.bp,1,"bp")}<br><span class="small">가격 ${chg(m.price_pct,2,"%")}</span></td>`:`<td class="r">–</td>`; }).join("")}</tr>`; }).join("");
   return `<div class="panel"><div class="ph"><h3>국채 금리와 가격 변화(추정)</h3></div><div class="tw"><table><thead><tr><th>만기</th><th class="r">금리</th>${cols.map(c=>`<th class="r">${c[1]}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>
   <p class="note">가격 변화는 기준일 금리를 표면금리로 하는 만기 고정 액면채(반기 이자)를 가정해 금리 변화만으로 계산한 추정치입니다. 실제 개별 채권 가격·이자 수익과 다릅니다. 금리가 오르면 가격은 내려갑니다.</p></div>`;
 }
@@ -443,8 +521,8 @@ function tabKeys(){
   return `${keyCard()}${statusCard()}${manualCard()}
     <div class="keyrow"><button class="btn" id="btn-refresh2">지금 다시 수집</button><span class="small muted">${(D.refresh||{}).running?"수집 중…":""}</span></div>`;
 }
-const TAB_FN = {overview:tabOverview, rates:tabRates, senti:tabSenti, credit:tabCredit, semi:tabSemi, fx:tabFx, pizza:tabPizza, ai:tabAI, keys:tabKeys};
-const TAB_SRC = {rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"관리자 입력 · FRED(미국 노동통계국)", fx:"한국은행 ECOS · FRED", pizza:"관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
+const TAB_FN = {morning:tabMorning, rates:tabRates, senti:tabSenti, credit:tabCredit, semi:tabSemi, fx:tabFx, pizza:tabPizza, ai:tabAI, keys:tabKeys};
+const TAB_SRC = {morning:"FRED · 한국은행 ECOS · IPO Radar", rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"관리자 입력 · FRED(미국 노동통계국)", fx:"한국은행 ECOS · FRED", pizza:"관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
 
 // ---------- 화면 ----------
 function header(){
@@ -505,6 +583,7 @@ document.addEventListener("pointermove", e=>{
 });
 document.addEventListener("pointerleave", ()=>{ tip.hidden = true; });
 document.addEventListener("change", e=>{
+  if(e.target.dataset && e.target.dataset.todo!=null){ const key="todo:"+todayKST(), st=store.get(key,{}); st[e.target.dataset.todo]=e.target.checked; store.set(key, st); return; }
   const sel = e.target.closest("select[data-per]"); if(!sel) return;
   PER[sel.dataset.per] = sel.value; store.set("per", PER);
   const y = scrollY; renderTab().then(()=>scrollTo(0,y)); scrollTo(0,y);
@@ -520,6 +599,10 @@ document.addEventListener("click", async e=>{
   if(go){ e.preventDefault(); setTab(go.dataset.goto); return; }
   const b = e.target.closest("button"); if(!b) return;
   if(b.dataset.tab){ setTab(b.dataset.tab); return; }
+  if(b.id==="copy-brief"){ const txt = briefText();
+    try{ await navigator.clipboard.writeText(txt); flash("요약을 복사했습니다. 메신저에 붙여 넣기 전에 내용을 한 번 확인하세요."); }
+    catch(err){ window.prompt("아래 내용을 복사하세요", txt); }
+    return; }
   if(b.id==="btn-refresh" || b.id==="btn-refresh2"){ b.disabled = true;
     const r = await post("/admin/macro-refresh"); flash(r.message || "요청했습니다"); startPoll(); return; }
   if(b.dataset.keysave || b.dataset.keyclear){

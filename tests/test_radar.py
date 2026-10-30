@@ -636,8 +636,22 @@ class TestServer(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         tracked = subprocess.run(["git", "ls-files", "dashboard"], cwd=root, capture_output=True, text=True).stdout.split()
         docker = (root / "Dockerfile").read_text(encoding="utf-8")
+        tracked += [f for f in subprocess.run(["git", "ls-files", "data"], cwd=root, capture_output=True, text=True).stdout.split()
+                    if f.count("/") == 1 and f.endswith(".json")]  # data/ 바로 아래 설정 파일(brand, macro_events 등)
         missing = [f for f in tracked if f not in docker]
         self.assertEqual(missing, [], "Dockerfile COPY에 빠진 화면 파일 → 배포 서버에서 502")
+
+    def test_ipo_week_for_morning_brief(self):
+        data = {"meta": {"generated_at": "t"}, "companies": [{"uid": "A", "underwriters": "가증권", "price_final": 10000, "price_band": None}],
+                "calendar": [{"uid": "A", "name": "가회사", "label": "청약", "start": "2026-10-29", "end": "2026-10-30", "is_sample": False},
+                             {"uid": "A", "name": "가회사", "label": "상장", "start": "2026-11-05", "end": "2026-11-05", "is_sample": False},
+                             {"uid": "A", "name": "가회사", "label": "상장", "start": "2026-11-20", "end": "2026-11-20", "is_sample": False},
+                             {"uid": "S", "name": "[예시] 나", "label": "청약", "start": "2026-10-30", "end": "2026-10-30", "is_sample": True}]}
+        (self.tmp / "data_view.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        w = self.server_mod.ipo_week(self.app, today=date(2026, 10, 30))
+        self.assertEqual([(i["label"], i["start"]) for i in w["items"]], [("청약", "2026-10-29"), ("상장", "2026-11-05")])
+        self.assertTrue(w["items"][0]["ends_today"] and w["items"][0]["today"])
+        self.assertEqual(w["items"][0]["underwriters"], "가증권")
 
     def test_handler_error_returns_500_not_dropped_connection(self):
         _, _, ack = self.login("admin-code-1")
@@ -1038,6 +1052,39 @@ class TestMacro(unittest.TestCase):
         self.assertTrue(any("/DashKey987654/" in u for u in seen if "ecos" in u))
         macro.set_key("ECOS_API_KEY", None)
         self.assertEqual(macro.get_key("ECOS_API_KEY"), "envkey11111")             # 지우면 환경변수 값으로
+
+    def test_morning_checks_and_calendar(self):
+        import os
+        from ipo_radar import macro
+        raw = {"eq.sp500": [("2026-10-28", 6000.0), ("2026-10-29", 5880.0)],      # −2%
+               "eq.nasdaq": [("2026-10-28", 20000.0), ("2026-10-29", 19900.0)],   # −0.5% → 기준 미달
+               "risk.vix": [("2026-10-28", 19.0), ("2026-10-29", 24.0)],
+               "us.10y": [("2026-10-28", 4.00), ("2026-10-29", 4.12)],
+               "fx.usdkrw": [("2026-10-28", 1380.0), ("2026-10-29", 1385.0)],
+               "us.10y2y": [("2026-10-29", -0.15)]}
+        out = macro.morning_checks(raw)
+        series = [c["series"] for c in out]
+        self.assertEqual(series, ["eq.sp500", "risk.vix", "us.10y", "us.10y2y"])
+        self.assertIn("-2.00%", out[0]["text"])
+        self.assertIn("+12bp", out[2]["text"])
+        self.assertEqual(macro.morning_checks({}), [])
+        # FRED 발표 일정: 주요 지표만, 한국어 이름으로
+        os.environ["FRED_API_KEY"] = "k" * 32
+        body = {"release_dates": [{"release_id": 50, "release_name": "Employment Situation", "date": "2026-11-06"},
+                                  {"release_id": 10, "release_name": "Consumer Price Index", "date": "2026-11-12"},
+                                  {"release_id": 999, "release_name": "Some Minor Release", "date": "2026-11-05"}]}
+        http.set_transport(lambda u, h, d=None: (200, json.dumps(body if "releases/dates" in u else {"observations": []}).encode()),
+                           sleep=lambda s: None)
+        rows = macro.fetch_fred_releases("k" * 32, date(2026, 10, 30))
+        self.assertEqual(rows, [("2026-11-06", "미국 고용보고서(비농업 고용·실업률)", 50), ("2026-11-12", "미국 소비자물가(CPI)", 10)])
+        macro.save_releases(self.conn, rows, "t")
+        cal = macro.calendar(self.conn, today=date(2026, 10, 30))
+        self.assertEqual([c["date"] for c in cal if c["kind"] == "release"], ["2026-11-06", "2026-11-12"])
+        ev = {c["name"][:5]: c for c in cal if c["kind"] == "event"}
+        self.assertTrue(all(c.get("source") for c in ev.values()))                 # 일정마다 출처
+        self.assertIn(False, [c["verified"] for c in ev.values()])                  # 미확인 일정은 표시
+        self.assertEqual([c["date"] for c in cal if c["kind"] == "event"], ["2026-11-26", "2026-12-09"])  # 60일 앞까지
+        self.assertEqual(macro.calendar(self.conn, today=date(2027, 6, 1)), [])     # 지난 일정은 안 나옴
 
     def test_missing_keys_marked_not_configured(self):
         import os

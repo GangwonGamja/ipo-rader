@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS macro_points (
 CREATE TABLE IF NOT EXISTS macro_status (
   source TEXT PRIMARY KEY, status TEXT NOT NULL, message TEXT, checked_at TEXT NOT NULL, points INTEGER
 );
+CREATE TABLE IF NOT EXISTS macro_calendar (
+  date TEXT NOT NULL, name TEXT NOT NULL, release_id INTEGER, source TEXT NOT NULL, fetched_at TEXT NOT NULL,
+  PRIMARY KEY(date, name)
+);
 CREATE TABLE IF NOT EXISTS ai_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, provider TEXT, model TEXT, purpose TEXT,
   input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER
@@ -59,6 +63,8 @@ SERIES = {
     # 위험 선호 (FRED)
     "risk.vix": ("risk", "VIX 변동성 지수", "pt", "fred", "VIXCLS"),
     "eq.sp500": ("risk", "S&P 500", "pt", "fred", "SP500"),
+    "eq.nasdaq": ("risk", "나스닥 종합", "pt", "fred", "NASDAQCOM"),
+    "eq.dow": ("risk", "다우존스 산업평균", "pt", "fred", "DJIA"),
     # 환율·원자재 (FRED)
     "fx.dxy_broad": ("fx", "달러 지수(무역가중, 광의)", "pt", "fred", "DTWEXBGS"),
     "cmd.wti": ("fx", "WTI 원유", "$/bbl", "fred", "DCOILWTICO"),
@@ -278,6 +284,12 @@ def collect(conn, today: date | None = None) -> dict:
                 n += _upsert(conn, sid, pts, src, now)
             except Exception as e:  # noqa: BLE001
                 errs.append(f"{SERIES[sid][1]}: {type(e).__name__}: {e}")
+        if src == "fred":  # 미국 경제지표 발표 일정(FRED 공표일 기준)
+            try:
+                k = save_releases(conn, fetch_fred_releases(key, today), now)
+                n += k
+            except Exception as e:  # noqa: BLE001
+                errs.append(f"경제지표 발표 일정: {type(e).__name__}: {e}")
         status = "ok" if not errs else ("partial" if n else ("blocked" if any("거부" in x or "robots" in x for x in errs) else "error"))
         _status(conn, src, status, "; ".join(errs[:4]) if errs else f"{len(ids)}개 지표 갱신", n)
         conn.commit()
@@ -583,10 +595,11 @@ def build(conn) -> dict:
         series[sid] = {"id": sid, "group": g, "name": name, "unit": unit, "source": src.get(sid, source), "code": code,
                        "last": pts[-1], "first": pts[0][0], "count": len(pts),
                        "years": sorted({d[:4] for d, _ in pts}, reverse=True),
+                       "chg_1d": ({"from": pts[-2][0], "delta": round(pts[-1][1] - pts[-2][1], 6)} if len(pts) > 1 else None),
                        "chg_1w": _change(pts, 7), "chg_1m": _change(pts, 30)}
     for sid, (g, name, unit, source, code) in SERIES.items():  # 아직 자료가 없는 지표도 빈 상태로 보여 준다
         series.setdefault(sid, {"id": sid, "group": g, "name": name, "unit": unit, "source": source, "code": code,
-                                "last": None, "first": None, "count": 0, "years": [], "chg_1w": None, "chg_1m": None})
+                                "last": None, "first": None, "count": 0, "years": [], "chg_1d": None, "chg_1w": None, "chg_1m": None})
     status = {r["source"]: dict(r) for r in conn.execute("SELECT * FROM macro_status").fetchall()}
     for s, meta in SOURCES.items():
         st = status.setdefault(s, {"source": s, "status": "never", "message": "아직 수집하지 않았습니다", "checked_at": None, "points": None})
@@ -600,7 +613,7 @@ def build(conn) -> dict:
         senti["years"] = sorted({d[:4] for d, _ in _SENTI_CACHE["val"]["history"]}, reverse=True)
     return {"generated_at": iso(), "series": series, "status": status, "bonds": bonds, "sentiment": senti,
             "usage": usage_summary(conn, 365), "manual_help": MANUAL_HELP, "keys": key_info(),
-            "history_days": HISTORY_DAYS,
+            "history_days": HISTORY_DAYS, "calendar": calendar(conn), "checks": morning_checks(raw),
             "refresh": {"running": STATE["running"], "last": STATE["last"], "last_error": STATE["last_error"],
                         "every_hours": REFRESH_HOURS}}
 
@@ -622,4 +635,115 @@ def points(conn, ids: list[str]) -> dict:
     if SENTIMENT_ID in ids:
         raw, _ = _raw(conn)
         out[SENTIMENT_ID] = _sentiment(conn, raw).get("history") or []
+    return out
+
+
+# ---------- 아침 브리핑: 경제 일정·체크 포인트 ----------
+
+# FRED 공표 일정 중 시장이 많이 보는 미국 지표(영문 공표명 일부 → 한국어 이름). 목록에 없는 공표는 화면에 넣지 않는다.
+MAJOR_RELEASES = [
+    ("employment situation", "미국 고용보고서(비농업 고용·실업률)"),
+    ("consumer price index", "미국 소비자물가(CPI)"),
+    ("producer price index", "미국 생산자물가(PPI)"),
+    ("gross domestic product", "미국 GDP"),
+    ("personal income and outlays", "미국 개인소득·소비(PCE 물가)"),
+    ("advance monthly sales for retail", "미국 소매판매"),
+    ("job openings and labor turnover", "미국 구인·이직(JOLTS)"),
+    ("unemployment insurance weekly claims", "미국 주간 신규 실업수당 청구"),
+    ("industrial production and capacity utilization", "미국 산업생산"),
+    ("university of michigan", "미시간대 소비자심리"),
+    ("new residential construction", "미국 주택착공"),
+    ("fomc press release", "FOMC 성명"),
+]
+
+
+def fetch_fred_releases(key: str, today: date) -> list[tuple[str, str, int]]:
+    url = ("https://api.stlouisfed.org/fred/releases/dates?"
+           f"api_key={key}&file_type=json&include_release_dates_with_no_data=true&sort_order=asc&limit=1000"
+           f"&realtime_start={(today - timedelta(days=1)).isoformat()}&realtime_end={(today + timedelta(days=14)).isoformat()}")
+    js = http.fetch_json(url, check_robots=False)
+    out = []
+    for r in js.get("release_dates") or []:
+        name, d = str(r.get("release_name") or ""), str(r.get("date") or "")
+        ko = next((k for en, k in MAJOR_RELEASES if en in name.lower()), None)
+        if ko and len(d) == 10:
+            out.append((d, ko, int(r.get("release_id") or 0)))
+    return out
+
+
+def save_releases(conn, rows, now: str) -> int:
+    ensure(conn)
+    if rows:
+        lo, hi = min(r[0] for r in rows), max(r[0] for r in rows)
+        conn.execute("DELETE FROM macro_calendar WHERE source='fred' AND date BETWEEN ? AND ?", (lo, hi))
+    conn.executemany("INSERT OR REPLACE INTO macro_calendar(date,name,release_id,source,fetched_at) VALUES(?,?,?,'fred',?)",
+                     [(d, n, rid, now) for d, n, rid in rows])
+    return len(rows)
+
+
+def load_events() -> list[dict]:
+    """중앙은행 회의 등 저장소에 적어 둔 일정(출처·확인 여부 포함)."""
+    import json
+    try:
+        return json.loads((config.DATA_DIR / "macro_events.json").read_text(encoding="utf-8")).get("events", [])
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def calendar(conn, today: date | None = None, days: int = 14) -> list[dict]:
+    ensure(conn)
+    today = today or datetime.now(config.KST).date()
+    lo, hi = (today - timedelta(days=1)).isoformat(), (today + timedelta(days=days)).isoformat()
+    out = [{"date": r["date"], "name": r["name"], "source": "FRED 공표 일정", "verified": True, "kind": "release"}
+           for r in conn.execute("SELECT date, name FROM macro_calendar WHERE date BETWEEN ? AND ? ORDER BY date", (lo, hi))]
+    hi_ev = (today + timedelta(days=60)).isoformat()  # 중앙은행 회의는 드물고 중요해 60일 앞까지
+    for e in load_events():
+        if lo <= str(e.get("date", "")) <= hi_ev:
+            out.append({"date": e["date"], "name": e.get("name"), "source": e.get("source"), "url": e.get("url"),
+                        "verified": bool(e.get("verified")), "note": e.get("note"), "kind": "event"})
+    return sorted(out, key=lambda x: (x["date"], x["kind"] != "event"))
+
+
+def morning_checks(raw: dict, today: date | None = None) -> list[dict]:
+    """정해진 규칙으로 눈에 띄는 움직임만 골라 사실 문장으로 알린다(해석·전망 아님)."""
+    out = []
+
+    def last2(sid):
+        pts = raw.get(sid) or []
+        return (pts[-1], pts[-2]) if len(pts) >= 2 else (None, None)
+
+    def last1(sid):
+        pts = raw.get(sid) or []
+        return pts[-1] if pts else None
+
+    def add(level, sid, text, d):
+        out.append({"level": level, "series": sid, "text": text, "date": d})
+
+    for sid, name, lim in (("eq.sp500", "S&P 500", 1.5), ("eq.nasdaq", "나스닥", 2.0), ("eq.dow", "다우", 1.5)):
+        a, b = last2(sid)
+        if a and b and b[1]:
+            pct = (a[1] / b[1] - 1) * 100
+            if abs(pct) >= lim:
+                add("warn", sid, f"{name} 전일 대비 {pct:+.2f}% (기준 ±{lim}% 이상)", a[0])
+    a = last1("risk.vix")
+    if a and a[1] >= 20:
+        add("bad" if a[1] >= 30 else "warn", "risk.vix", f"VIX {a[1]:.1f} — {'30 이상(공포 구간으로 자주 언급)' if a[1] >= 30 else '20 이상(변동성 확대 구간으로 자주 언급)'}", a[0])
+    for sid, name in (("us.10y", "미국 10년물"), ("kr.3y", "국고채 3년")):
+        a, b = last2(sid)
+        if a and b and abs(a[1] - b[1]) >= 0.10:
+            add("warn", sid, f"{name} 금리 전일 대비 {(a[1] - b[1]) * 100:+.0f}bp (기준 ±10bp 이상)", a[0])
+    a, b = last2("fx.usdkrw")
+    if a and b and abs(a[1] - b[1]) >= 10:
+        add("warn", "fx.usdkrw", f"원/달러 전일 대비 {a[1] - b[1]:+.1f}원 (기준 ±10원 이상)", a[0])
+    a = last1("us.10y2y")
+    if a and a[1] < 0:
+        add("info", "us.10y2y", f"미국 장단기 금리차 {a[1]:+.2f}%p — 역전 상태", a[0])
+    hy = raw.get("credit.hy") or []
+    if len(hy) > 5:
+        ch = _change(hy, 7)
+        if ch and ch["delta"] >= 0.30:
+            add("warn", "credit.hy", f"미국 하이일드 스프레드 1주 {ch['delta'] * 100:+.0f}bp 확대 (기준 +30bp 이상)", hy[-1][0])
+    a = last1("fng.crypto")
+    if a and (a[1] <= 20 or a[1] >= 80):
+        add("info", "fng.crypto", f"암호화폐 공포·탐욕 지수 {a[1]:.0f} — {'극단적 공포' if a[1] <= 20 else '극단적 탐욕'} 구간", a[0])
     return out
