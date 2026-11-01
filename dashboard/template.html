@@ -391,7 +391,7 @@ function header(){
   return `<header class="hd gut"><div class="in">${id}
     <div class="hmeta"><span>데이터 기준 <b class="num">${esc(ago(DATA.meta.generated_at))}</b> (KST)</span>
       ${ADMIN?`<span class="chip ${lr&&lr.status==="success"?"good":lr&&lr.status==="failed"?"bad":"warn"}">${esc(lr?({success:"수집 정상",partial:"일부 자료원 미연결",failed:"수집 실패",running:"수집 중"}[lr.status]||lr.status):"기록 없음")}</span>`:""}
-      <span>자동 갱신: 매주 월 08:00</span>
+      <span>자동 갱신: 매일 07:30</span>
       <label class="toggle"><input type="checkbox" id="tg-sample" ${S.showSample?"checked":""}> 예시 데이터 보기</label></div></div></header>
   <nav class="nav gut" aria-label="메뉴"><div class="in" role="tablist">${TABS.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div></nav>`;
 }
@@ -702,7 +702,7 @@ function sourcesTab(){
     <td class="num small">${s.last_success?esc(ago(s.last_success)):"없음"}</td><td class="num small">${esc(ago(s.last_attempt))}</td><td class="num">${s.consecutive_failures}</td>
     <td class="small">${esc(s.status==="ok"?"–":(NEED[s.source]||""))}</td><td class="small muted">${esc((s.last_error||"").slice(0,100))}</td></tr>`).join("")}
   </tbody></table></div></div></section>
-  <section class="card"><div class="ch"><h2>최근 자동 실행</h2><span class="muted small">${lr?esc(lr.run_id):""} · 다음 실행 매주 월 08:00</span></div><div class="cb">
+  <section class="card"><div class="ch"><h2>최근 자동 실행</h2><span class="muted small">${lr?esc(lr.run_id):""} · 다음 실행 매일 07:30</span></div><div class="cb">
     ${lr?`<div class="tbl-wrap"><table><thead><tr><th>단계</th><th>결과</th><th>소요</th><th>비고</th></tr></thead><tbody>${Object.entries(stages).map(([k,v])=>`<tr><td>${esc(k)}</td><td><span class="chip ${v.status==="error"?"bad":v.degraded?"warn":"good"}">${v.status==="error"?"오류":v.degraded?"일부 실패":"정상"}</span></td><td class="num">${v.seconds}s</td><td class="small">${esc((v.error||"").slice(0,120))}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">실행 기록 없음</div>`}
   </div></section>
   <section class="card"><div class="ch"><h2>관심도 점수 산식</h2></div><div class="cb small" style="max-width:76ch">
@@ -832,6 +832,7 @@ function tabOffer(c, r, R){
       ${row("공모 금액", F["offer.proceeds_band"], F["offer.proceeds_band"]?`<span class="num">${krw(F["offer.proceeds_band"].value.low)} ~ ${krw(F["offer.proceeds_band"].value.high)}</span>`:`<span class="muted">미확인</span>`)}
       ${row("예상 시가총액", mc&&mc.source?{source:mc.source}:null, mc?`<span class="num">${krw(mc.low)} ~ ${krw(mc.high)}</span> <span class="muted small">${esc(mc.formula)}</span>`:`<span class="muted">공모 후 주식수 미확인</span>`)}
       ${row("주관사", null, esc(c.underwriters||"미확인"))}
+      ${F["offer.syndicate"]?row("증권사별 인수 수량", F["offer.syndicate"], F["offer.syndicate"].value.map(x=>`${esc(x.firm)} <span class="num">${Number(x.shares).toLocaleString()}주</span>`).join(" · ")+` <span class="muted small">청약 가능 증권사 참고(배정 물량은 청약 공고 확인)</span>`):""}
       ${row("자금 사용 목적", F["offer.use_of_proceeds_text"]||F["offer.use_of_proceeds"], F["offer.use_of_proceeds_text"]?esc(F["offer.use_of_proceeds_text"].value):F["offer.use_of_proceeds"]?itemVal({key:"x",value:F["offer.use_of_proceeds"].value}):`<span class="muted">미확인</span>`)}
       ${row("최소 청약 · 증거금률", null, `${c.min_subscription?Number(c.min_subscription).toLocaleString()+"주":"미확인"} · ${c.deposit_rate!=null?pct(c.deposit_rate):"미확인"} <button class="chip line" data-calcfor="${c.uid}">증거금 계산</button>`)}
     </tbody></table></div></section>

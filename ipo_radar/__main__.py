@@ -32,6 +32,16 @@ def next_run(now: datetime) -> datetime:
     return cand
 
 
+def next_daily(now: datetime) -> datetime:
+    now = now.astimezone(config.KST)
+    cand = now.replace(hour=config.DAILY_HOUR, minute=config.DAILY_MINUTE, second=0, microsecond=0)
+    return cand if cand > now else cand + timedelta(days=1)
+
+
+def prev_daily(now: datetime) -> datetime:
+    return next_daily(now) - timedelta(days=1)
+
+
 def run_with_recovery(trigger="schedule", retries=3, wait_sec=1800, run_fn=None, sleep=time.sleep, **kw):
     """실행 결과가 failed이면 wait_sec 후 재실행. partial은 다음 주기에 소스별로 다시 시도한다."""
     from . import pipeline

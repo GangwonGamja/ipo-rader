@@ -166,7 +166,7 @@ def build_data(conn, now: datetime | None = None) -> dict:
             "generated_at": iso(now), "today": t, "lookahead_end": end90, "week_end": wk_end,
             "weights": config.INTEREST_WEIGHTS, "growth_prior": config.GROWTH_PRIOR,
             "stale_days": config.STALE_DAYS,
-            "schedule": "매주 월요일 08:00 (Asia/Seoul)",
+            "schedule": "매일 07:30 (Asia/Seoul) · 월요일은 관심도까지 전체 수집",
             "last_run": dict(run) if run else None, "last_ok_run": dict(last_ok) if last_ok else None,
         },
         "sources": [dict(x) for x in conn.execute("SELECT * FROM source_status ORDER BY source")],

@@ -131,7 +131,11 @@ def collect_ipostock(r: Run):
         if row["uid"] not in seen:
             registry._record_change(r.conn, r.run_id, row["uid"], "postponed", "ipostock_listing", "listed",
                                     "IPOSTOCK 달력에서 사라짐(연기·철회 가능성, 공시 확인 필요)", None, r.at, dedupe=True)
-    set_source_status(r.conn, "ipostock", True, at=r.at, note=f"{len(urls)}개 월 조회")
+    if not rows:  # 4개월을 봤는데 일정이 하나도 없으면 페이지 형식이 바뀐 것으로 본다
+        set_source_status(r.conn, "ipostock", False, f"{len(urls)}개 월을 조회했지만 일정을 하나도 읽지 못함 — 페이지 형식 변경 의심",
+                          status="error", at=r.at)
+        return {"degraded": True, "rows": 0, "months": urls}
+    set_source_status(r.conn, "ipostock", True, at=r.at, note=f"{len(urls)}개 월 조회 · 일정 {len(rows)}건")
     return {"rows": len(rows), "months": urls}
 
 
@@ -170,8 +174,51 @@ def verify_dart(r: Run):
         for k, v in facts.items():
             registry.set_fact(r.conn, uid, k, v, source_id=sid, run_id=r.run_id, as_of=f.get("rcept_dt"), at=r.at)
         n += 1
-    set_source_status(r.conn, "dart", True, at=r.at, note=f"지분증권 공시 {len(filings)}건")
-    return {"filings": len(filings), "parsed": n}
+    docs = parse_dart_documents(r, filings)
+    set_source_status(r.conn, "dart", True, at=r.at,
+                      note=f"지분증권 공시 {len(filings)}건 · 본문 읽음 {docs['read']}건(값 {docs['facts']}개)"
+                           + (f" · 본문 실패 {len(docs['errors'])}건" if docs["errors"] else ""))
+    return {"filings": len(filings), "parsed": n, "documents": docs}
+
+
+DOC_MAX_PER_RUN = 15
+
+
+def parse_dart_documents(r: Run, filings: list[dict]) -> dict:
+    """회사별 가장 최근 신고서(발행조건확정·정정 포함) 본문에서 상장일·확정 공모가·희망 범위·수요예측 결과 등을 읽는다.
+    한 번 읽은 공시는 다시 받지 않는다."""
+    r.conn.execute("""CREATE TABLE IF NOT EXISTS dart_docs (rcept_no TEXT PRIMARY KEY, corp_code TEXT, parsed_at TEXT,
+                      n_facts INTEGER, error TEXT)""")
+    latest = {}
+    for f in filings:
+        if f.get("is_withdrawal") or not f.get("rcept_no"):
+            continue
+        cur = latest.get(f["corp_code"])
+        if cur is None or f["rcept_no"] > cur["rcept_no"]:
+            latest[f["corp_code"]] = f
+    read = n_facts = 0
+    errors = []
+    for f in sorted(latest.values(), key=lambda x: x["rcept_no"], reverse=True):
+        if read >= DOC_MAX_PER_RUN:
+            break
+        if r.conn.execute("SELECT 1 FROM dart_docs WHERE rcept_no=? AND error IS NULL", (f["rcept_no"],)).fetchone():
+            continue
+        try:
+            facts = dart.extract_doc_facts(dart.document_text(f["rcept_no"]))
+        except (FetchError, dart.NotConfigured, Exception) as e:  # noqa: BLE001 — 한 공시 실패가 전체를 막지 않게
+            errors.append(f"{f.get('corp_name')}: {type(e).__name__}: {e}"[:200])
+            r.conn.execute("INSERT OR REPLACE INTO dart_docs VALUES(?,?,?,?,?)", (f["rcept_no"], f["corp_code"], r.at, 0, str(e)[:200]))
+            continue
+        read += 1
+        uid = r.conn.execute("SELECT uid FROM companies WHERE corp_code=?", (f["corp_code"],)).fetchone()
+        if uid:
+            sid = upsert_source(r.conn, f["url"], "official_disclosure", f"{f.get('report_nm')} 본문", "DART", f.get("rcept_dt"), r.at)
+            for k, v in facts.items():
+                registry.set_fact(r.conn, uid["uid"], k, v, source_id=sid, run_id=r.run_id, as_of=f.get("rcept_dt"), at=r.at)
+            n_facts += len(facts)
+        r.conn.execute("INSERT OR REPLACE INTO dart_docs VALUES(?,?,?,?,NULL)", (f["rcept_no"], f["corp_code"], r.at, len(facts)))
+        r.conn.commit()
+    return {"read": read, "facts": n_facts, "errors": errors[:5]}
 
 
 def refresh_financials(r: Run):

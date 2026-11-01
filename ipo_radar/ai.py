@@ -26,7 +26,7 @@ MAX_PER_RUN = int(os.environ.get("IPO_RADAR_AI_MAX", "20"))
 # 서버 측 거절 대체(fallbacks "default")를 받는 모델. 그 밖의 모델(예: claude-haiku-5-5)에는 보내지 않는다.
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 # 무료 플랜 등에서 서버가 깨어날 때마다 하는 '따라잡기' 수집에서도 AI를 돌릴지(기본: 돌리지 않음 → 비용 반복 방지)
-AI_ON_CATCHUP = os.environ.get("IPO_RADAR_AI_ON_CATCHUP", "0") == "1"
+AI_ON_CATCHUP = os.environ.get("IPO_RADAR_AI_ON_CATCHUP", "1") == "1"  # 바뀐 기업만 다시 만들므로 재시작 직후에도 생성
 # 동시에 요약할 기업 수. Gemini 무료 등급은 분당 요청 수가 작아 기본 2
 WORKERS = int(os.environ.get("IPO_RADAR_AI_WORKERS", "2" if PROVIDER == "gemini" else "4"))
 # 모델 자동 선택 순서(무료 등급 하루 요청 한도가 큰 것부터). 목록에 없으면 이용 가능한 Flash 계열 중 최신을 고른다.

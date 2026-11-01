@@ -912,7 +912,10 @@ class TestAI(unittest.TestCase):
     def test_catchup_records_ai_status(self):
         import os
 
-        from ipo_radar import pipeline
+        from ipo_radar import ai, pipeline
+        self.assertTrue(ai.AI_ON_CATCHUP)                      # 기본: 재시작 직후에도 요약 생성(바뀐 기업만)
+        self.addCleanup(setattr, ai, "AI_ON_CATCHUP", ai.AI_ON_CATCHUP)
+        ai.AI_ON_CATCHUP = False                               # IPO_RADAR_AI_ON_CATCHUP=0 으로 끈 경우
         saved = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
         try:
             r = type("R", (), {"trigger": "catch-up", "conn": self.conn, "at": "2026-10-30T08:00:00+09:00"})()
@@ -1287,6 +1290,77 @@ class TestMacro(unittest.TestCase):
         self.assertEqual((u["total"]["calls"], u["total"]["input"], u["total"]["output"], u["cost_usd"]), (2, 2000, 1000, None))
         os.environ["IPO_RADAR_AI_PRICE_IN"], os.environ["IPO_RADAR_AI_PRICE_OUT"] = "0.5", "2"
         self.assertAlmostEqual(macro.usage_summary(self.conn)["cost_usd"], 0.003)
+
+
+class TestDartDocuments(unittest.TestCase):
+    def test_extract_only_labeled_values(self):
+        from ipo_radar.collectors import dart
+        t = ("수요예측 결과 국내외 기관 1,571곳이 참여해 경쟁률은 630.15:1 을 기록 의무보유확약 비율 : 12.5 % "
+             "1주당 확정공모가액은 12,400원으로 최종 확정 희망공모가액 밴드 : 10,600원 ~ 12,400원 "
+             "상장예정일 : 2026년 11월 04일 최소청약주식수는 10주 청약증거금률 50 %")
+        self.assertEqual(dart.extract_doc_facts(t), {
+            "sched.listing": {"start": "2026-11-04", "end": "2026-11-04"}, "offer.price_final": 12400,
+            "offer.price_band": {"low": 10600, "high": 12400}, "demand.competition_ratio": 630.15,
+            "demand.lockup_commit_ratio": 0.125, "offer.min_subscription": 10, "offer.deposit_rate": 0.5})
+        self.assertEqual(dart.extract_doc_facts("매매개시예정일은 2026.11.04"), {"sched.listing": {"start": "2026-11-04", "end": "2026-11-04"}})
+        self.assertEqual(dart.extract_doc_facts("공모가는 12,400원 2026년 11월 4일 상장, 경쟁률 9:1"), {})  # 이름표 없으면 안 읽음
+        self.assertEqual(dart.clean_text("<P>상장&nbsp;예정일</P><TD>2026년 11월 04일</TD>"), "상장 예정일 2026년 11월 04일")
+
+    def test_pipeline_reads_latest_filing_once(self):
+        import io
+        import zipfile
+        from ipo_radar import pipeline
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        self.addCleanup(setattr, config, "DART_API_KEY", config.DART_API_KEY)
+        config.DART_API_KEY = "testkey"
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("doc.xml", "<DOC><P>확정공모가액 : 12,400원</P><P>상장예정일 : 2026년 11월 04일</P></DOC>".encode("utf-8"))
+        zbytes = buf.getvalue()
+        calls = []
+
+        def net(url, headers, data=None):
+            calls.append(url)
+            if "list.json" in url:
+                return 200, json.dumps({"status": "000", "total_page": 1, "list": [
+                    {"corp_code": "00999", "corp_name": "이에스티", "corp_cls": "E", "report_nm": "증권신고서(지분증권)",
+                     "rcept_no": "20260901000001", "rcept_dt": "20260901"},
+                    {"corp_code": "00999", "corp_name": "이에스티", "corp_cls": "E", "report_nm": "[발행조건확정]증권신고서(지분증권)",
+                     "rcept_no": "20261021000002", "rcept_dt": "20261021"}]}).encode()
+            if "estkRs.json" in url:
+                return 200, json.dumps({"status": "000", "group": [
+                    {"title": "일반사항", "list": [{"sbd": "2026년 10월 22일 ~ 2026년 10월 23일", "pymd": "2026년 10월 27일"}]},
+                    {"title": "인수인정보", "list": [{"actnmn": "대신증권", "udtcnt": "2,000,000"}, {"actnmn": "한국투자증권", "udtcnt": "200,000"}]}]}).encode()
+            if "document.xml" in url:
+                return 200, zbytes
+            return 404, b""
+        http.set_transport(net, sleep=lambda s: None)
+        self.addCleanup(http.set_transport, None)
+        res = pipeline.run(now=datetime(2026, 11, 1, 9, 0, tzinfo=KST), db_path=tmp / "d.sqlite3", with_sample=False,
+                           skip={"ipostock", "financials", "buzz", "search", "ai", "export"})
+        self.assertEqual(res["stages"]["dart"]["documents"]["read"], 1)
+        docs = [u for u in calls if "document.xml" in u]
+        self.assertEqual(len(docs), 1)
+        self.assertIn("rcept_no=20261021000002", docs[0])                 # 가장 최근(발행조건확정) 공시만
+        conn = connect(tmp / "d.sqlite3")
+        uid = conn.execute("SELECT uid FROM companies WHERE name='이에스티'").fetchone()["uid"]
+        f = {r["key"]: json.loads(r["value"]) for r in conn.execute("SELECT key, value FROM facts WHERE uid=?", (uid,))}
+        self.assertEqual(f["sched.listing"], {"start": "2026-11-04", "end": "2026-11-04"})
+        self.assertEqual(f["offer.price_final"], 12400)
+        self.assertEqual(f["sched.subscription"], {"start": "2026-10-22", "end": "2026-10-23"})
+        self.assertEqual(f["offer.syndicate"][0], {"firm": "대신증권", "shares": 2000000.0})
+        conn.close()
+        calls.clear()                                                      # 다음 실행에서는 같은 공시를 다시 받지 않음
+        pipeline.run(now=datetime(2026, 11, 2, 7, 30, tzinfo=KST), db_path=tmp / "d.sqlite3", with_sample=False,
+                     skip={"ipostock", "financials", "buzz", "search", "ai", "export"})
+        self.assertFalse([u for u in calls if "document.xml" in u])
+
+    def test_daily_schedule_and_missed_run(self):
+        from ipo_radar.__main__ import next_daily, prev_daily
+        self.assertEqual(next_daily(datetime(2026, 11, 1, 7, 0, tzinfo=KST)), datetime(2026, 11, 1, 7, 30, tzinfo=KST))
+        self.assertEqual(next_daily(datetime(2026, 11, 1, 9, 0, tzinfo=KST)), datetime(2026, 11, 2, 7, 30, tzinfo=KST))
+        self.assertEqual(prev_daily(datetime(2026, 11, 1, 9, 0, tzinfo=KST)), datetime(2026, 11, 1, 7, 30, tzinfo=KST))
 
 
 if __name__ == "__main__":

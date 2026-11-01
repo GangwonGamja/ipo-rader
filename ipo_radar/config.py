@@ -20,6 +20,8 @@ LOOKAHEAD_DAYS = 90
 # 스케줄: 매주 월요일 08:00 KST
 SCHEDULE_WEEKDAY = 0  # Monday
 SCHEDULE_HOUR = 8
+# 매일 가벼운 수집(일정·DART 공시·본문·AI). 월요일 08:00 전체 수집은 그대로
+DAILY_HOUR, DAILY_MINUTE = 7, 30
 
 # 데이터가 이 일수보다 오래되면 '오래된 데이터'로 표시
 STALE_DAYS = 8

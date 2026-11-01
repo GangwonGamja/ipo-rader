@@ -74,7 +74,7 @@ def robots_allowed(url: str, check: bool = True) -> bool:
 
 
 def fetch(url: str, *, headers: dict | None = None, check_robots: bool = True,
-          attempts: int | None = None, encoding: str | None = None, data: bytes | None = None) -> str:
+          attempts: int | None = None, encoding: str | None = None, data: bytes | None = None, raw: bool = False):
     """텍스트를 가져온다. 일시 오류는 지수 백오프로 재시도, 차단은 즉시 실패."""
     host = urllib.parse.urlparse(url).netloc
     if host in _dead_hosts:
@@ -95,6 +95,8 @@ def fetch(url: str, *, headers: dict | None = None, check_robots: bool = True,
             last = FetchError(f"{type(e).__name__}: {e}")
         else:
             if status == 200:
+                if raw:
+                    return body
                 if encoding:
                     return body.decode(encoding, "replace")
                 for enc in ("utf-8", "cp949"):

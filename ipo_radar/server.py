@@ -7,7 +7,7 @@
 - 이용자 모드에는 자료원 상태·오류·실행 기록을 뺀 별도 화면(*_view.html, data_view.json)을 보낸다.
 - 제공 경로(허용 목록만): /  /login  /logout  /data.json  /ipo_calendar.ics  /ipo_list.csv  /api/status  /healthz
   POST /login, POST /admin/refresh (관리자만)
-- 스케줄러: 매주 월 08:00 KST 실행, 전체 실패 시 30분 간격 최대 3회 재시도.
+- 스케줄러: 매일 07:30 KST 실행(월요일은 관심도까지 전체), 놓친 수집은 서버가 깨어날 때 바로 실행.
   서버가 꺼져 있어 지난 실행을 놓쳤으면(마지막 성공이 7일 넘게 지남) 시작 직후 실행.
 - 같은 수집이 동시에 두 번 돌지 않도록 프로세스 내 잠금 + 파일 잠금.
 """
@@ -98,7 +98,7 @@ class Runner:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)  # 다른 프로세스가 실행 중이면 BlockingIOError
         return f
 
-    def run(self, trigger: str) -> dict | None:
+    def run(self, trigger: str, skip: set | None = None) -> dict | None:
         if not self.lock.acquire(blocking=False):
             return None
         try:
@@ -110,7 +110,7 @@ class Runner:
         try:
             from .__main__ import run_with_recovery
             res = run_with_recovery(trigger=trigger, with_sample=self.with_sample, export_dir=self.out_dir,
-                                    retries=3 if trigger == "schedule" else 1)
+                                    retries=3 if trigger in ("schedule", "daily") else 1, skip=skip or set())
             self.state.update(last={"run_id": res["run_id"], "status": res["status"], "finished_at": iso()}, last_error=None)
             log(f"수집 완료 {res['run_id']} {res['status']}")
             return res
@@ -139,21 +139,26 @@ class Runner:
             return True
         if not row:
             return True
+        from .__main__ import prev_daily
         last = datetime.fromisoformat(row["started_at"])
-        return datetime.now(config.KST) - last > timedelta(days=7) or not (self.out_dir / "index.html").exists()
+        # 직전 정기 수집 시각(매일 07:30) 이후 성공한 수집이 없으면 놓친 것으로 본다(서버가 잠들어 있던 경우 등)
+        return last < prev_daily(datetime.now(config.KST)) or not (self.out_dir / "index.html").exists()
 
     def scheduler(self):
-        from .__main__ import next_run
+        from .__main__ import next_daily
         if self.needs_catch_up():
-            log("마지막 성공 실행이 7일을 넘었거나 대시보드가 없어 즉시 수집합니다")
+            log("직전 정기 수집을 놓쳤거나 대시보드가 없어 즉시 수집합니다")
             self.run("catch-up")
         while True:
-            nxt = next_run(datetime.now(config.KST))
+            nxt = next_daily(datetime.now(config.KST))
             self.state["next"] = iso(nxt)
             log(f"다음 자동 수집 {iso(nxt)}")
             while datetime.now(config.KST) < nxt:
                 time.sleep(min(300, max(1, (nxt - datetime.now(config.KST)).total_seconds())))
-            self.run("schedule")
+            if nxt.weekday() == config.SCHEDULE_WEEKDAY:
+                self.run("schedule")                          # 월요일: 관심도(뉴스·영상·검색)까지 전체 수집
+            else:
+                self.run("daily", skip={"buzz", "search"})   # 평일·주말: 일정·공시·본문·AI만 빠르게
 
 
 def log(msg: str):
@@ -640,7 +645,7 @@ def hub_page(app, role: str) -> str:
         pass
     cards = [
         ("/ipo", "IPO Radar · 공모주", "이번 주 청약 캘린더, 기업 공부 노트·재무, 적정가 판단, 수요예측 결과, 증거금 계산기",
-         f"마지막 수집 {ipo_at} (매주 월 08:00 자동)"),
+         f"마지막 수집 {ipo_at} (매일 07:30 자동)"),
         ("/macro", "매크로 분석", "한·미 금리와 국채 가격 변화, 신용 스프레드·CDS, 공포·탐욕 지수, DRAM 가격, 피자 지수, AI 토큰 사용량·비용",
          f"마지막 갱신 {macro_at} (6시간마다 자동)"),
     ]
