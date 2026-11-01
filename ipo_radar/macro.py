@@ -81,6 +81,7 @@ SERIES = {
     # 국내 지수 (공공데이터포털, 공식·하루 늦게 반영)
     "kr.kospi": ("kr_eq", "코스피", "pt", "datagokr", "코스피"),
     "kr.kosdaq": ("kr_eq", "코스닥", "pt", "datagokr", "코스닥"),
+    "kr.kospi200": ("kr_eq", "코스피 200", "pt", "krx", "코스피 200"),
     # Yahoo Finance (비공식·선택): 선물·아시아·반도체·원자재
     "y.es": ("global", "S&P 500 선물", "pt", "yahoo", "ES=F"),
     "y.nq": ("global", "나스닥100 선물", "pt", "yahoo", "NQ=F"),
@@ -112,6 +113,7 @@ SOURCES = {
     "fred": {"name": "FRED (미국 세인트루이스 연준)", "key": "FRED_API_KEY", "url": "https://fred.stlouisfed.org"},
     "ecos": {"name": "한국은행 ECOS", "key": "ECOS_API_KEY", "url": "https://ecos.bok.or.kr"},
     "altme": {"name": "alternative.me 암호화폐 공포·탐욕 지수", "key": None, "url": "https://alternative.me/crypto/fear-and-greed-index/"},
+    "krx": {"name": "KRX 한국거래소 Open API", "key": "KRX_AUTH_KEY", "url": "https://openapi.krx.co.kr"},
     "datagokr": {"name": "공공데이터포털 금융위원회 지수시세", "key": "DATA_GO_KR_KEY", "url": "https://www.data.go.kr/data/15094807/openapi.do"},
     "yahoo": {"name": "Yahoo Finance (비공식)", "key": None, "url": "https://finance.yahoo.com"},
     "cnn": {"name": "CNN 공포·탐욕 지수 (비공식)", "key": None, "url": "https://edition.cnn.com/markets/fear-and-greed"},
@@ -140,7 +142,7 @@ def ensure(conn):
 
 # ---------- API 키: 관리자 화면에서 입력 ----------
 
-KEY_NAMES = ("ECOS_API_KEY", "FRED_API_KEY", "DATA_GO_KR_KEY")
+KEY_NAMES = ("KRX_AUTH_KEY", "ECOS_API_KEY", "FRED_API_KEY", "DATA_GO_KR_KEY")
 KEY_RE = re.compile(r"^[A-Za-z0-9+/=%_-]{8,200}$")  # 공공데이터포털 키는 +/= 또는 %가 들어갈 수 있음
 
 
@@ -555,17 +557,39 @@ def collect(conn, today: date | None = None) -> dict:
         _status(conn, src, status, ("; ".join(errs[:4]) if errs else f"{len(ids)}개 지표 갱신") + how, n)
         conn.commit()
         summary[src] = status
-    for src, fn in (("cnn", _collect_cnn), ("dramx", _collect_dramx), ("pizzint", _collect_pizzint)):
+    for src, fn in (("krx", _collect_krx), ("cnn", _collect_cnn), ("dramx", _collect_dramx), ("pizzint", _collect_pizzint)):
         try:
             n, msg = fn(conn, today, now)
             _status(conn, src, "ok", msg, n)
             summary[src] = "ok"
         except Exception as e:  # noqa: BLE001
+            if type(e).__name__ == "NotConfigured":
+                _status(conn, src, "not_configured", f"{e} — 'API 키·자료 관리' 탭에서 등록하면 자동 수집합니다", 0)
+                summary[src] = "not_configured"
+                continue
             blocked = getattr(e, "blocked", False)
             _status(conn, src, "blocked" if blocked else "error", f"{type(e).__name__}: {e}", 0)
             summary[src] = "blocked" if blocked else "error"
         conn.commit()
     return summary
+
+
+def _collect_krx(conn, today, now):
+    """KRX 공식 지수 종가(코스피·코스피200·코스닥). 하루 한 번씩 조회하므로 처음에는 최근 45일만 채운다."""
+    from .collectors import krx
+    if not krx.auth_key():
+        raise krx.NotConfigured("KRX_AUTH_KEY 미등록")
+    ensure(conn)
+    row = conn.execute("SELECT MAX(date) d FROM macro_points WHERE source='krx'").fetchone()
+    start = date.fromisoformat(row["d"]) + timedelta(days=1) if row["d"] else today - timedelta(days=45)
+    start = max(start, today - timedelta(days=60))
+    n, d = 0, start
+    while d < today:  # 자료는 전 영업일까지
+        if d.weekday() < 5:
+            for sid, v in krx.index_day(d).items():
+                n += _upsert(conn, sid, [(d.isoformat(), v)], "krx", now)
+        d += timedelta(days=1)
+    return n, f"지수 종가 {n}건 갱신(코스피·코스피200·코스닥)"
 
 
 def _collect_cnn(conn, today, now):

@@ -35,6 +35,20 @@ def _scores(conn, uid):
         """SELECT i.run_id, i.score, i.computed_at FROM interest_scores i WHERE uid=? ORDER BY computed_at""", (uid,))]
 
 
+def _perf(offer, d1, last):
+    """공모가 대비 시초가·첫날 종가·최근 종가 수익률(KRX)."""
+    if not (d1 or last):
+        return None
+    ret = lambda v: round(v / offer - 1, 4) if (offer and v) else None  # noqa: E731
+    out = {"offer": offer}
+    if d1:
+        out.update(day1_date=d1.get("date"), open=d1.get("open"), close1=d1.get("close"),
+                   open_ret=ret(d1.get("open")), close1_ret=ret(d1.get("close")))
+    if last:
+        out.update(last_date=last.get("date"), last=last.get("close"), last_ret=ret(last.get("close")), mktcap=last.get("mktcap"))
+    return out
+
+
 def company_rows(conn, today: date) -> list[dict]:
     out = []
     for c in conn.execute("SELECT * FROM companies ORDER BY name"):
@@ -91,6 +105,8 @@ def company_rows(conn, today: date) -> list[dict]:
             "min_subscription": (facts.get("offer.min_subscription") or {}).get("value"),
             "deposit_rate": (facts.get("offer.deposit_rate") or {}).get("value"),
             "syndicate": (facts.get("offer.syndicate") or {}).get("value"),
+            "listing_krx": (facts.get("listing.krx") or {}).get("value"),
+            "perf": _perf(final, (facts.get("perf.day1") or {}).get("value"), (facts.get("perf.latest") or {}).get("value")),
         })
     return out
 

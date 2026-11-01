@@ -351,7 +351,7 @@ function manualPanel(group, title, note, wide=true){
 const STATUS = {disabled:["꺼짐",""], ok:["정상","ok"], partial:["일부 실패","warn"], not_configured:["키 미등록","warn"], blocked:["접근 차단","bad"], error:["오류","bad"], never:["미수집",""]};
 const MROWS = {
   global:[["eq.sp500","S&P 500","senti","pct"],["eq.nasdaq","나스닥 종합","senti","pct"],["eq.dow","다우존스","senti","pct"],["risk.vix","VIX","senti","abs"],["fx.dxy_broad","달러 지수(광의)","fx","pct"],["cmd.wti","WTI 원유","fx","pct"],["fng.cnn","CNN 공포·탐욕","senti","abs"]],
-  kr:[["kr.kospi","코스피","markets","pct"],["kr.kosdaq","코스닥","markets","pct"],["y.samsung","삼성전자","markets","pct"],["y.hynix","SK하이닉스","markets","pct"]],
+  kr:[["kr.kospi","코스피","markets","pct"],["kr.kosdaq","코스닥","markets","pct"],["kr.kospi200","코스피 200","markets","pct"],["y.samsung","삼성전자","markets","pct"],["y.hynix","SK하이닉스","markets","pct"]],
   futures:[["y.es","S&P 500 선물","markets","pct"],["y.nq","나스닥100 선물","markets","pct"],["y.sox","필라델피아 반도체","markets","pct"],["y.nvda","엔비디아","markets","pct"],["y.nikkei","닛케이 225","markets","pct"],["y.hsi","항셍","markets","pct"],["y.sse","상하이종합","markets","pct"],["y.gold","금 선물","markets","pct"],["y.btc","비트코인","markets","pct"],["y.usdjpy","달러/엔","markets","abs"]],
   rates:[["us.2y","미국 국채 2년","rates","bp"],["us.10y","미국 국채 10년","rates","bp"],["us.10y2y","미국 장단기 금리차","rates","bp"],["kr.base","한국 기준금리","rates","bp"],["kr.3y","국고채 3년","rates","bp"],["kr.10y","국고채 10년","rates","bp"],["fx.usdkrw","원/달러","fx","abs"],["credit.hy","미국 하이일드 스프레드","credit","bp"]]
 };
@@ -375,6 +375,15 @@ function ipoBlock(){
   return `<ul class="lst">${ipo.items.map(it=>`<li><span class="d">${it.start===it.end?dayLabel(it.start):`${dayLabel(it.start)}~${it.end.slice(5).replace("-","/")}`}</span>
     <span>${it.today?`<span class="chip warn">${tag(it)}</span>`:`<span class="chip">${tag(it)}</span>`} <b>${esc(it.name)}</b>${it.underwriters?` <span class="muted small">${esc(it.underwriters)}</span>`:""}${it.price_final?` <span class="small num">확정 ${Number(it.price_final).toLocaleString()}원</span>`:it.price_band?` <span class="small num muted">희망 ${Number(it.price_band.low).toLocaleString()}~${Number(it.price_band.high).toLocaleString()}원</span>`:""}</span></li>`).join("")}</ul>
     <p class="note"><a href="/ipo">IPO Radar에서 자세히 보기 →</a> 일정은 공시·수집 기준이며 변경될 수 있습니다.</p>`;
+}
+function recentBlock(){
+  const rec = (D.ipo && D.ipo.recent) || [];
+  if(!rec.length) return "";
+  const r = v => v==null ? "–" : chg(v*100, 1, "%");
+  return `<div class="panel"><div class="ph"><h3>최근 30일 상장 공모주 성과 <span class="muted small">KRX · 공모가 대비</span></h3></div>
+    <div class="tw"><table><thead><tr><th>종목</th><th>상장일</th><th class="r">시초가</th><th class="r">첫날 종가</th><th class="r">최근 종가</th></tr></thead><tbody>${
+    rec.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${esc((x.listing.list_dd||"").slice(5).replace("-","/"))}</td><td class="r num">${r(x.perf.open_ret)}</td><td class="r num">${r(x.perf.close1_ret)}</td><td class="r num">${r(x.perf.last_ret)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">과거 수익률이며 앞으로의 수익을 뜻하지 않습니다.</p></div>`;
 }
 function calBlock(){
   const cal = D.calendar || [];
@@ -428,6 +437,7 @@ function tabMorning(){
     <div class="g2">${mtable("해외 증시·위험 지표", MROWS.global)}${mtable("금리·환율·신용", MROWS.rates)}</div>
     <div class="g2">${mtable("국내 증시", MROWS.kr)}${mtable("선물·아시아·원자재", MROWS.futures)}</div>
     <div class="g2"><div class="panel"><div class="ph"><h3>오늘·이번 주 공모주</h3></div>${ipoBlock()}</div>
+      ${recentBlock()}
       <div class="panel"><div class="ph"><h3>경제지표·중앙은행 일정 <span class="muted small">지표 2주 · 회의 60일</span></h3></div>${calBlock()}</div></div>
     <section class="sub"><h3>PB 아침 체크리스트</h3>${todoBlock()}</section>`;
 }
@@ -441,13 +451,13 @@ function bondTable(){
   return `<div class="panel"><div class="ph"><h3>국채 금리와 가격 변화(추정)</h3></div><div class="tw"><table><thead><tr><th>만기</th><th class="r">금리</th>${cols.map(c=>`<th class="r">${c[1]}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>
   <p class="note">가격 변화는 기준일 금리를 표면금리로 하는 만기 고정 액면채(반기 이자)를 가정해 금리 변화만으로 계산한 추정치입니다. 실제 개별 채권 가격·이자 수익과 다릅니다. 금리가 오르면 가격은 내려갑니다.</p></div>`;
 }
-const MARKET_PANELS = [["kospi","kr.kospi"],["kosdaq","kr.kosdaq"],["samsung","y.samsung"],["hynix","y.hynix"],["sox","y.sox"],["nvda","y.nvda"],
+const MARKET_PANELS = [["kospi","kr.kospi"],["kosdaq","kr.kosdaq"],["kospi200","kr.kospi200"],["samsung","y.samsung"],["hynix","y.hynix"],["sox","y.sox"],["nvda","y.nvda"],
   ["es","y.es"],["nq","y.nq"],["nikkei","y.nikkei"],["hsi","y.hsi"],["sse","y.sse"],["gold","y.gold"],["btc","y.btc"],["usdjpy","y.usdjpy"]];
 function tabMarkets(){
   const cell = ([k,id]) => { const m = S(id); return m ? panel("mk-"+k, m.name, [id]) : ""; };
   const pairs = [];
   for(let i=0;i<MARKET_PANELS.length;i+=2) pairs.push(`<div class="g2">${cell(MARKET_PANELS[i])}${MARKET_PANELS[i+1]?cell(MARKET_PANELS[i+1]):""}</div>`);
-  return `<p class="note">코스피·코스닥은 공공데이터포털 키가 있으면 금융위원회 공식 자료(영업일 하루 늦게)를, 없으면 Yahoo Finance 값을 씁니다. 나머지는 Yahoo Finance(비공식)에서 받으며, 장중에는 마지막 값이 확정 종가가 아닐 수 있습니다.</p>${pairs.join("")}`;
+  return `<p class="note">코스피·코스피200·코스닥은 KRX 키가 있으면 한국거래소 공식 종가(전 영업일까지), 공공데이터포털 키가 있으면 금융위원회 자료를, 둘 다 없으면 Yahoo Finance 값을 씁니다. 나머지는 Yahoo Finance(비공식)에서 받으며, 장중에는 마지막 값이 확정 종가가 아닐 수 있습니다.</p>${pairs.join("")}`;
 }
 function yahooBox(){
   const on = !!D.yahoo, st = D.status.yahoo || {}; const [lab,cls] = STATUS[st.status]||["",""];
@@ -515,8 +525,9 @@ function tabAI(){
     ${u.models.length?`<div class="tw"><table><thead><tr><th>모델(최근 1년)</th><th class="r">호출</th><th class="r">입력</th><th class="r">출력</th><th class="r">비용(USD)</th></tr></thead><tbody>${u.models.map(m=>`<tr><td>${esc(m.model)}</td><td class="r num">${m.calls}</td><td class="r num">${m.input.toLocaleString()}</td><td class="r num">${m.output.toLocaleString()}</td><td class="r num">${m.cost_usd!=null?m.cost_usd:"–"}</td></tr>`).join("")}</tbody></table></div>`:""}
     <p class="note">토큰 수는 AI 응답에 담긴 사용량 정보로 기록합니다. 비용은 서버 환경변수 IPO_RADAR_AI_PRICE_IN·IPO_RADAR_AI_PRICE_OUT(USD/100만 토큰) 단가로 계산한 추정치이며, 실제 청구액은 Google AI Studio(또는 Anthropic Console) 결제 화면이 기준입니다.</p>`;
 }
-const KEY_SRC = {ECOS_API_KEY:"ecos", FRED_API_KEY:"fred", DATA_GO_KR_KEY:"datagokr"};
-const KEY_HELP = {DATA_GO_KR_KEY:["공공데이터포털(금융위원회 지수시세)","https://www.data.go.kr/data/15094807/openapi.do","data.go.kr → 금융위원회_지수시세정보 활용신청(무료)","코스피·코스닥 지수(2020년 이후, 영업일 하루 늦게 반영). 일반 인증키(Decoding)·(Encoding) 둘 다 됩니다"],
+const KEY_SRC = {KRX_AUTH_KEY:"krx", ECOS_API_KEY:"ecos", FRED_API_KEY:"fred", DATA_GO_KR_KEY:"datagokr"};
+const KEY_HELP = {KRX_AUTH_KEY:["KRX 한국거래소 Open API","https://openapi.krx.co.kr","openapi.krx.co.kr → 회원가입 → 서비스별 이용신청(승인 필요)","공모주 상장일·상장주식수 공식 확인, 상장 후 시초가·종가 성과, 코스피·코스피200·코스닥 공식 종가. 이용신청할 서비스: 유가증권·코스닥 종목기본정보, 유가증권·코스닥 일별매매정보, KOSPI·KOSDAQ 시리즈 일별시세. 하루 10,000회, 키 유효기간 1년"],
+  DATA_GO_KR_KEY:["공공데이터포털(금융위원회 지수시세)","https://www.data.go.kr/data/15094807/openapi.do","data.go.kr → 금융위원회_지수시세정보 활용신청(무료)","코스피·코스닥 지수(2020년 이후, 영업일 하루 늦게 반영). 일반 인증키(Decoding)·(Encoding) 둘 다 됩니다"],
 ECOS_API_KEY:["한국은행 ECOS","https://ecos.bok.or.kr/api/","ecos.bok.or.kr/api → 인증키 신청(무료)","한국 기준금리·국고채 3/10/30년·원/달러. 키가 없으면 공개 샘플 키로 최근 값만 받습니다"],
                   FRED_API_KEY:["FRED(미국 세인트루이스 연준)","https://fredaccount.stlouisfed.org/apikeys","fredaccount.stlouisfed.org → API Keys(무료)","미국 금리·국채·회사채 스프레드·VIX·S&P 500·달러·유가. 키가 없어도 공개 CSV로 받고, 키를 등록하면 경제지표 발표 일정까지 받습니다"]};
 function keyCard(){
@@ -556,7 +567,7 @@ function tabKeys(){
     <div class="keyrow"><button class="btn" id="btn-refresh2">지금 다시 수집</button><span class="small muted">${(D.refresh||{}).running?"수집 중…":""}</span></div>`;
 }
 const TAB_FN = {morning:tabMorning, markets:tabMarkets, rates:tabRates, senti:tabSenti, credit:tabCredit, semi:tabSemi, fx:tabFx, pizza:tabPizza, ai:tabAI, keys:tabKeys};
-const TAB_SRC = {morning:"FRED · 한국은행 ECOS · 공공데이터포털 · Yahoo Finance · CNN · IPO Radar", markets:"공공데이터포털·Yahoo Finance", rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · CNN · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"DRAMeXchange 자동 · FRED · 관리자 입력", fx:"한국은행 ECOS · FRED", pizza:"PizzINT 자동 · 관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
+const TAB_SRC = {morning:"FRED · 한국은행 ECOS · 공공데이터포털 · Yahoo Finance · CNN · IPO Radar", markets:"KRX 한국거래소 · 공공데이터포털 · Yahoo Finance", rates:"FRED · 한국은행 ECOS", senti:"자체 산출 · CNN · alternative.me · FRED", credit:"관리자 입력 · FRED(ICE BofA)", semi:"DRAMeXchange 자동 · FRED · 관리자 입력", fx:"한국은행 ECOS · FRED", pizza:"PizzINT 자동 · 관리자 입력", ai:"이 서비스의 AI 요약 호출 기록", keys:"관리자만 키 등록·입력 가능"};
 
 // ---------- 화면 ----------
 function header(){

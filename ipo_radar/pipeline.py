@@ -15,7 +15,7 @@ import traceback
 from datetime import date, datetime, timedelta
 
 from . import config, demand, interest, registry, report, valuation
-from .collectors import buzz, dart, datalab, ipostock
+from .collectors import buzz, dart, datalab, ipostock, krx
 from .db import connect, dumps, iso, loads, set_source_status, upsert_source
 from .http import FetchError, reset_run_state
 
@@ -26,7 +26,7 @@ def _today(now: datetime) -> date:
 
 # 서버의 '준비 중' 화면에 보여 줄 현재 진행 단계
 PROGRESS: dict = {"stage": None, "since": None, "run_id": None}
-STAGE_LABEL = {"seed": "기본 자료 불러오기", "ipostock": "IPOSTOCK 일정 수집", "dart": "DART 공시 확인", "financials": "DART 재무 조회",
+STAGE_LABEL = {"seed": "기본 자료 불러오기", "ipostock": "IPOSTOCK 일정 수집", "dart": "DART 공시 확인", "krx": "KRX 상장·시세 확인", "financials": "DART 재무 조회",
                "buzz": "뉴스·커뮤니티 수집", "search": "검색 추이 수집", "sample": "예시 데이터", "compute": "점수·가치평가·보고서",
                "briefing": "주간 브리핑", "ai": "AI 요약 작성", "export": "대시보드 만들기"}
 
@@ -219,6 +219,79 @@ def parse_dart_documents(r: Run, filings: list[dict]) -> dict:
         r.conn.execute("INSERT OR REPLACE INTO dart_docs VALUES(?,?,?,?,NULL)", (f["rcept_no"], f["corp_code"], r.at, len(facts)))
         r.conn.commit()
     return {"read": read, "facts": n_facts, "errors": errors[:5]}
+
+
+# ---------- 3-2. KRX 한국거래소: 상장일·상장주식수 확인, 상장 후 성과 ----------
+
+KRX_RECENT_DAYS = 180   # 이 기간 안에 상장한 종목만 공모주로 짝지음(같은 이름의 오래된 상장사와 섞이지 않게)
+
+
+def verify_krx(r: Run):
+    try:
+        base = krx.base_info(r.today - timedelta(days=1))  # KRX 자료는 전 영업일까지
+    except krx.NotConfigured as e:
+        set_source_status(r.conn, "krx", None, str(e), status="not_configured", at=r.at)
+        return {"degraded": True, "error": str(e)}
+    except FetchError as e:
+        set_source_status(r.conn, "krx", False, str(e), status="blocked" if e.blocked else "error", at=r.at)
+        return {"degraded": True, "error": str(e)}
+    recent_from = (r.today - timedelta(days=KRX_RECENT_DAYS)).isoformat()
+    by_name: dict[str, list[dict]] = {}
+    for info in base.values():
+        if info["list_dd"] and info["list_dd"] >= recent_from:
+            for nm in {info.get("abbr"), info.get("name")}:
+                if nm:
+                    by_name.setdefault(registry.normalize_name(nm), []).append(info)
+    matched, perf_n, errs = 0, 0, []
+    day_cache: dict[tuple, dict] = {}
+
+    def day(mkt, d):
+        k = (mkt, d)
+        if k not in day_cache:
+            day_cache[k] = krx.daily(mkt, date.fromisoformat(d))
+        return day_cache[k]
+
+    sid = upsert_source(r.conn, "https://openapi.krx.co.kr", "official_disclosure", "KRX 종목기본정보·일별매매정보", "KRX",
+                        r.today.isoformat(), r.at)
+    for c in r.conn.execute("SELECT uid, name FROM companies WHERE is_sample=0 AND status!='withdrawn'").fetchall():
+        facts = registry.get_facts(r.conn, c["uid"])
+        cands = by_name.get(registry.normalize_name(c["name"]), [])
+        planned = ((facts.get("sched.listing") or {}).get("value") or {}).get("start")
+        if planned:  # 예정 상장일이 있으면 2주 안쪽만 같은 회사로 본다
+            cands = [x for x in cands if abs((date.fromisoformat(x["list_dd"]) - date.fromisoformat(planned)).days) <= 14]
+        if len(cands) != 1:
+            continue
+        info = cands[0]
+        matched += 1
+        r.conn.execute("UPDATE companies SET stock_code=?, market=? WHERE uid=?", (info["code"], info["market"], c["uid"]))
+        registry.set_fact(r.conn, c["uid"], "sched.listing", {"start": info["list_dd"], "end": info["list_dd"]},
+                          source_id=sid, run_id=r.run_id, as_of=r.today.isoformat(), at=r.at)
+        registry.set_fact(r.conn, c["uid"], "listing.krx", {k: info[k] for k in ("code", "market", "list_dd", "shares", "abbr")},
+                          source_id=sid, run_id=r.run_id, as_of=r.today.isoformat(), at=r.at)
+        if info.get("shares"):
+            registry.set_fact(r.conn, c["uid"], "offer.shares_post_ipo", info["shares"], source_id=sid, run_id=r.run_id,
+                              unit="주", as_of=r.today.isoformat(), at=r.at)
+        if info["list_dd"] > (r.today - timedelta(days=1)).isoformat():
+            continue  # 아직 거래 전
+        try:  # 상장 첫날(시가·종가)과 최근 영업일 종가
+            first = day(info["market"], info["list_dd"]).get(info["code"])
+            if first and not facts.get("perf.day1"):
+                registry.set_fact(r.conn, c["uid"], "perf.day1", first, source_id=sid, run_id=r.run_id, as_of=info["list_dd"], at=r.at)
+            for back in range(1, 8):
+                d = (r.today - timedelta(days=back)).isoformat()
+                if d < info["list_dd"]:
+                    break
+                last = day(info["market"], d).get(info["code"])
+                if last:
+                    registry.set_fact(r.conn, c["uid"], "perf.latest", last, source_id=sid, run_id=r.run_id, as_of=d, at=r.at)
+                    break
+            perf_n += 1
+        except FetchError as e:
+            errs.append(f"{c['name']}: {e}"[:150])
+        r.conn.commit()
+    set_source_status(r.conn, "krx", not errs or bool(matched), "; ".join(errs[:2]) if errs else None, at=r.at,
+                      note=f"최근 {KRX_RECENT_DAYS}일 신규 상장 {sum(1 for i in base.values() if (i['list_dd'] or '') >= recent_from)}종목 중 공모주 {matched}곳 확인 · 성과 {perf_n}곳")
+    return {"matched": matched, "perf": perf_n, "errors": errs[:3]}
 
 
 def refresh_financials(r: Run):
@@ -450,7 +523,7 @@ def run(*, now: datetime | None = None, trigger: str = "manual", db_path=None, w
     reset_run_state()
     r = Run(conn, now, trigger)
     steps = [
-        ("seed", load_seed_files), ("ipostock", collect_ipostock), ("dart", verify_dart),
+        ("seed", load_seed_files), ("ipostock", collect_ipostock), ("dart", verify_dart), ("krx", verify_krx),
         ("financials", refresh_financials), ("buzz", refresh_buzz), ("search", refresh_search),
     ]
     for name, fn in steps:

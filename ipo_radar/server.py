@@ -701,7 +701,13 @@ def ipo_week(app, today=None, days: int = 7) -> dict:
                       "underwriters": c.get("underwriters"), "price_final": c.get("price_final"),
                       "price_band": c.get("price_band"), "kind": ev.get("kind")})
     items.sort(key=lambda x: (x["start"], x["name"]))
-    return {"available": True, "items": items, "generated_at": (data.get("meta") or {}).get("generated_at")}
+    since = (today - timedelta(days=30)).isoformat()
+    recent = [{"name": c["name"], "uid": c["uid"], "underwriters": c.get("underwriters"), "perf": c["perf"],
+               "listing": (c.get("listing_krx") or {})}
+              for c in data.get("companies", []) if not c.get("is_sample") and c.get("perf")
+              and ((c.get("listing_krx") or {}).get("list_dd") or "") >= since]
+    recent.sort(key=lambda x: x["listing"].get("list_dd") or "", reverse=True)
+    return {"available": True, "items": items, "recent": recent, "generated_at": (data.get("meta") or {}).get("generated_at")}
 
 
 def macro_page(app, role: str) -> str:

@@ -1363,5 +1363,96 @@ class TestDartDocuments(unittest.TestCase):
         self.assertEqual(prev_daily(datetime(2026, 11, 1, 9, 0, tzinfo=KST)), datetime(2026, 11, 1, 7, 30, tzinfo=KST))
 
 
+class TestKRX(unittest.TestCase):
+    def _net(self, calls):
+        base_ksq = {"OutBlock_1": [
+            {"ISU_CD": "KR7999990005", "ISU_SRT_CD": "999990", "ISU_NM": "이에스티", "ISU_ABBRV": "이에스티", "LIST_DD": "20261104",
+             "LIST_SHRS": "13,912,000", "KIND_STKCERT_TP_NM": "보통주"},
+            {"ISU_CD": "KR7111110001", "ISU_SRT_CD": "111110", "ISU_NM": "영광", "ISU_ABBRV": "영광", "LIST_DD": "19990101",
+             "LIST_SHRS": "1,000"}]}
+
+        def net(url, headers, data=None):
+            calls.append((url, headers.get("AUTH_KEY")))
+            if "ksq_isu_base_info" in url:
+                return 200, json.dumps(base_ksq).encode()
+            if "stk_isu_base_info" in url:
+                return 200, json.dumps({"OutBlock_1": []}).encode()
+            if "ksq_bydd_trd" in url and "basDd=20261104" in url:
+                return 200, json.dumps({"OutBlock_1": [{"ISU_CD": "999990", "ISU_NM": "이에스티", "TDD_OPNPRC": "24,800",
+                                                         "TDD_CLSPRC": "21,000", "MKTCAP": "292,152,000,000", "LIST_SHRS": "13,912,000"}]}).encode()
+            if "ksq_bydd_trd" in url and "basDd=20261106" in url:
+                return 200, json.dumps({"OutBlock_1": [{"ISU_CD": "999990", "ISU_NM": "이에스티", "TDD_OPNPRC": "20,000",
+                                                         "TDD_CLSPRC": "18,600", "MKTCAP": "258,763,200,000", "LIST_SHRS": "13,912,000"}]}).encode()
+            if "kospi_dd_trd" in url:
+                return 200, json.dumps({"OutBlock_1": [{"IDX_NM": "코스피", "CLSPRC_IDX": "2,610.25"}, {"IDX_NM": "코스피 200", "CLSPRC_IDX": "350.1"},
+                                                        {"IDX_NM": "코스피 100", "CLSPRC_IDX": "1"}]}).encode()
+            if "kosdaq_dd_trd" in url:
+                return 200, json.dumps({"OutBlock_1": [{"IDX_NM": "코스닥", "CLSPRC_IDX": "855.5"}]}).encode()
+            return 200, json.dumps({"OutBlock_1": []}).encode()
+        return net
+
+    def test_listing_confirmed_and_performance(self):
+        from ipo_radar import pipeline
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        self.addCleanup(setattr, config, "KRX_AUTH_KEY", config.KRX_AUTH_KEY)
+        config.KRX_AUTH_KEY = "krxkey"
+        calls = []
+        http.set_transport(self._net(calls), sleep=lambda s: None)
+        self.addCleanup(http.set_transport, None)
+        conn = connect(tmp / "k.sqlite3")
+        for name, listing in (("이에스티", "2026-11-04"), ("영광", "2026-11-02")):
+            uid, _ = registry.resolve_company(conn, name, source_type="websearch_summary", at="t")
+            registry.set_fact(conn, uid, "sched.listing", {"start": listing, "end": listing}, source_id=None, basis="news_reported", at="t")
+            if name == "이에스티":
+                registry.set_fact(conn, uid, "offer.price_final", 12400, source_id=None, basis="news_reported", at="t")
+        conn.commit()
+        conn.close()
+        res = pipeline.run(now=datetime(2026, 11, 7, 7, 30, tzinfo=KST), db_path=tmp / "k.sqlite3", with_sample=False,
+                           skip={"ipostock", "dart", "financials", "buzz", "search", "ai", "export"})
+        self.assertEqual(res["stages"]["krx"]["matched"], 1)       # 1999년 상장한 같은 이름 '영광'과는 짝짓지 않음
+        self.assertTrue(all(k == "krxkey" for _, k in calls))       # 키는 헤더로만
+        self.assertFalse(any("krxkey" in u for u, _ in calls))
+        conn = connect(tmp / "k.sqlite3")
+        row = conn.execute("SELECT uid, stock_code, market FROM companies WHERE name='이에스티'").fetchone()
+        self.assertEqual((row["stock_code"], row["market"]), ("999990", "KOSDAQ"))
+        f = registry.get_facts(conn, row["uid"])
+        self.assertEqual(f["offer.shares_post_ipo"]["value"], 13912000.0)
+        self.assertEqual(f["perf.day1"]["value"]["open"], 24800.0)
+        self.assertEqual(f["perf.latest"]["value"]["date"], "2026-11-06")
+        from ipo_radar import export
+        p = export._perf(12400, f["perf.day1"]["value"], f["perf.latest"]["value"])
+        self.assertEqual((p["open_ret"], p["last_ret"]), (1.0, 0.5))
+        self.assertIsNone(conn.execute("SELECT stock_code FROM companies WHERE name='영광'").fetchone()["stock_code"])
+        conn.close()
+
+    def test_not_configured_and_index(self):
+        import os
+        from ipo_radar import macro, pipeline
+        from ipo_radar.collectors import krx
+        self.assertEqual(krx.code6("KR7005930003"), "005930")
+        self.addCleanup(setattr, config, "KRX_AUTH_KEY", config.KRX_AUTH_KEY)
+        config.KRX_AUTH_KEY = ""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        from ipo_radar import db as db_mod
+        self.addCleanup(setattr, db_mod, "DB_PATH", db_mod.DB_PATH)
+        db_mod.DB_PATH = tmp / "m.sqlite3"
+        conn = connect(tmp / "m.sqlite3")
+        r = type("R", (), {"conn": conn, "today": date(2026, 11, 7), "at": "t", "run_id": "x"})()
+        self.assertTrue(pipeline.verify_krx(r)["degraded"])
+        calls = []
+        http.set_transport(self._net(calls), sleep=lambda s: None)
+        self.addCleanup(http.set_transport, None)
+        os.environ.pop("FRED_API_KEY", None)
+        self.assertTrue(macro.set_key("KRX_AUTH_KEY", "krxkey12345")["ok"])   # 화면에서 등록한 키를 사용
+        n, msg = macro._collect_krx(conn, date(2026, 11, 7), "t")
+        self.assertGreater(n, 0)
+        vals = {r_["series"]: r_["value"] for r_ in conn.execute("SELECT series, value FROM macro_points WHERE date='2026-11-06'")}
+        self.assertEqual(vals, {"kr.kospi": 2610.25, "kr.kospi200": 350.1, "kr.kosdaq": 855.5})
+        self.assertFalse(any("2026-11-01" in u or "basDd=20261101" in u for u, _ in calls))  # 주말은 조회 안 함
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

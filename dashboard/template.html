@@ -672,8 +672,8 @@ function changesTab(){
 }
 
 const NEED = {ipostock:"네트워크 허용: www.ipostock.co.kr", dart:"DART_API_KEY (opendart.fss.or.kr 무료 발급)", dart_financials:"DART_API_KEY", naver_news:"NAVER_CLIENT_ID / SECRET (developers.naver.com)", naver_blog:"네이버 검색 API 키", naver_cafe:"네이버 검색 API 키",
-  naver_stock_board:"상장 후 사용 가능", naver_datalab:"네이버 개발자센터 앱에 '데이터랩(검색어트렌드)' 추가 + NAVER 키", youtube:"YOUTUBE_API_KEY (Google Cloud에서 YouTube Data API v3 사용 설정)", ai_api:"GEMINI_API_KEY (aistudio.google.com에서 무료 발급)", krx:"KRX_AUTH_KEY (openapi.krx.co.kr)"};
-const SNAME = {ipostock:"IPOSTOCK 일정", dart:"DART 공시", dart_financials:"DART 재무", naver_news:"네이버 뉴스", naver_blog:"네이버 블로그", naver_cafe:"네이버 카페", naver_stock_board:"네이버 종목토론방", naver_datalab:"네이버 데이터랩 검색 추이", youtube:"유튜브 영상 반응", krx:"KRX 시세", ai_api:"AI 요약 (Gemini)"};
+  naver_stock_board:"상장 후 사용 가능", naver_datalab:"네이버 개발자센터 앱에 '데이터랩(검색어트렌드)' 추가 + NAVER 키", youtube:"YOUTUBE_API_KEY (Google Cloud에서 YouTube Data API v3 사용 설정)", ai_api:"GEMINI_API_KEY (aistudio.google.com에서 무료 발급)", krx:"KRX_AUTH_KEY (openapi.krx.co.kr 이용신청 후, 매크로 화면 API 키 탭 또는 Render Environment에 등록)"};
+const SNAME = {ipostock:"IPOSTOCK 일정", dart:"DART 공시", dart_financials:"DART 재무", naver_news:"네이버 뉴스", naver_blog:"네이버 블로그", naver_cafe:"네이버 카페", naver_stock_board:"네이버 종목토론방", naver_datalab:"네이버 데이터랩 검색 추이", youtube:"유튜브 영상 반응", krx:"KRX 상장·시세 확인", ai_api:"AI 요약 (Gemini)"};
 const SST = {ok:["정상","good"],error:["실패","bad"],blocked:["접근 차단","bad"],not_configured:["설정 필요","warn"],disabled:["비활성","hold"]};
 function accessCard(){
   const a = (typeof SRV!=="undefined" && SRV.access) || null;
@@ -817,6 +817,7 @@ function tabFinance(c, r, R){
     ${proj?`<section><h3>회사 제시 전망 <span class="chip warn">확인된 실적 아님</span></h3><div class="tbl-wrap"><table class="fin"><thead><tr><th>구분 (억원)</th>${Object.keys(proj).sort().map(y=>`<th class="r">${y}년(E)</th>`).join("")}</tr></thead><tbody>
       ${[["revenue","매출액"],["op_income","영업이익"],["net_income","순이익"]].filter(([k])=>Object.values(proj).some(d=>d[k]!=null)).map(([k,l])=>`<tr><th>${l}</th>${Object.keys(proj).sort().map(y=>eokCell(proj[y][k])).join("")}</tr>`).join("")}</tbody></table></div><span class="small muted">회사가 제시한 목표치입니다${R.ref(F["fin.projection"])}. 달성 여부는 불확실합니다.</span></section>`:""}`;
 }
+function retTxt(v){ if(v==null) return ""; const p=(v*100).toFixed(1); return v>0?`<span style="color:#c8281e">▲ ${p}%</span>`:v<0?`<span style="color:#1f5fbf">▼ ${Math.abs(p)}%</span>`:`<span class="muted">0%</span>`; }
 function tabOffer(c, r, R){
   const F = r.facts||{}, sup = r.supply||{};
   const sched = [["sched.demand_forecast","수요예측"],["sched.price_fix","공모가 확정"],["sched.subscription","일반 청약"],["sched.payment","납입"],["sched.refund","환불"],["sched.listing","상장 예정"]];
@@ -836,6 +837,12 @@ function tabOffer(c, r, R){
       ${row("자금 사용 목적", F["offer.use_of_proceeds_text"]||F["offer.use_of_proceeds"], F["offer.use_of_proceeds_text"]?esc(F["offer.use_of_proceeds_text"].value):F["offer.use_of_proceeds"]?itemVal({key:"x",value:F["offer.use_of_proceeds"].value}):`<span class="muted">미확인</span>`)}
       ${row("최소 청약 · 증거금률", null, `${c.min_subscription?Number(c.min_subscription).toLocaleString()+"주":"미확인"} · ${c.deposit_rate!=null?pct(c.deposit_rate):"미확인"} <button class="chip line" data-calcfor="${c.uid}">증거금 계산</button>`)}
     </tbody></table></div></section>
+    ${c.perf?`<section><h3>상장 후 성과 <span class="muted small" style="font-weight:400">한국거래소(KRX) · 공모가 ${c.perf.offer?won(c.perf.offer):"미확인"} 대비</span></h3><div class="tbl-wrap"><table class="kvt"><tbody>
+      ${c.perf.open!=null?`<tr><th>시초가 <span class="muted small num">${esc(c.perf.day1_date||"")}</span></th><td><span class="num">${won(c.perf.open)}</span> ${retTxt(c.perf.open_ret)}</td></tr>`:""}
+      ${c.perf.close1!=null?`<tr><th>상장 첫날 종가</th><td><span class="num">${won(c.perf.close1)}</span> ${retTxt(c.perf.close1_ret)}</td></tr>`:""}
+      ${c.perf.last!=null?`<tr><th>최근 종가 <span class="muted small num">${esc(c.perf.last_date||"")}</span></th><td><span class="num">${won(c.perf.last)}</span> ${retTxt(c.perf.last_ret)}${c.perf.mktcap?` <span class="muted small">시가총액 ${krw(c.perf.mktcap)}</span>`:""}</td></tr>`:""}
+      ${c.listing_krx?`<tr><th>상장 정보</th><td>${esc(c.listing_krx.market)} <span class="num">${esc(c.listing_krx.code)}</span> · 상장일 <span class="num">${esc(c.listing_krx.list_dd)}</span>${c.listing_krx.shares?` · 상장주식수 <span class="num">${Number(c.listing_krx.shares).toLocaleString()}주</span>`:""}</td></tr>`:""}
+    </tbody></table></div><p class="muted small">과거 수익률이며 앞으로의 수익을 뜻하지 않습니다.</p></section>`:""}
     <section><h3>상장일 수급 <span class="muted small" style="font-weight:400">가치평가와 별도</span></h3><div class="tbl-wrap"><table class="kvt"><tbody>
       ${row("유통가능물량", F["offer.float_ratio"], sup.float_ratio!=null?`<span class="num">${pct(sup.float_ratio,2)}</span>`:`<span class="muted">미공개</span>`)}
       ${row("구주매출 비중", null, sup.old_share_ratio!=null?`<span class="num">${pct(sup.old_share_ratio,1)}</span>`:`<span class="muted">미확인</span>`)}

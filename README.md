@@ -60,7 +60,7 @@ python -W ignore -m unittest -v tests.test_radar
 |---|---|---|---|
 | IPOSTOCK `ipo04.asp?str1=연&str2=월` | 후보 발견, 일정 | 네트워크 접근 | **차단**(이 세션 네트워크 정책) — 파서는 합성 픽스처로만 검증됨 |
 | OpenDART (`list`, `estkRs`, `fnlttSinglAcntAll`) | 공식 확인, 정정·철회, 공모 조건, 재무 | `DART_API_KEY` (무료) | 키 없음 + 도메인 차단 |
-| KRX Open API | 비교기업 시가총액 | `KRX_AUTH_KEY` | 키 없음 |
+| KRX Open API (한국거래소) | 공모주 상장일·상장주식수 공식 확인, 상장 후 시초가·첫날 종가·최근 종가 성과, 코스피·코스피200·코스닥 공식 종가, 비교기업 시가총액 | `KRX_AUTH_KEY` (서비스별 이용신청·승인 필요, 매크로 화면 API 키 탭에서 등록 가능) | 도메인 차단 — 명세는 공개 클라이언트(krxon) 기준으로 확인, 응답은 테스트 픽스처로만 검증 |
 | KIND | 상장예정일 교차확인 | 공식 API 없음 | 자동 수집 안 함(구조 확인·이용 조건 검토 필요) |
 | 네이버 검색 API (뉴스·블로그·카페) | 관심도 | `NAVER_CLIENT_ID/SECRET` | 키 없음 |
 | Google 뉴스 RSS | 뉴스 보조 경로 | 없음 | 도메인 차단 |
