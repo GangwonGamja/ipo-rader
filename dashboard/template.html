@@ -320,6 +320,9 @@ const KSTF = new Intl.DateTimeFormat("ko-KR",{timeZone:"Asia/Seoul",month:"numer
 const ago = iso => { if(!iso) return "–"; const d = new Date(iso); if(isNaN(d)) return String(iso); const p = Object.fromEntries(KSTF.formatToParts(d).map(x=>[x.type,x.value])); return `${p.month}.${p.day} ${p.hour}:${p.minute}`; };
 const addDays = (s,n) => { const d=new Date(s+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
 const byUid = Object.fromEntries(DATA.companies.map(c=>[c.uid,c]));
+// 네이버·유튜브는 선택 기능: 실제 기업의 관심도가 하나도 없으면(키 미등록) 관련 화면을 숨긴다
+const OPTIONAL_SRC = /^(naver_(news|blog|cafe|datalab|stock_board)|youtube|google_news)$/;
+const BUZZ = DATA.companies.some(c=>!c.is_sample && c.interest_score!=null);
 const isHouse = c => !!(HOUSE && c && (c.underwriters||"").includes(HOUSE));
 const houseChip = c => isHouse(c) ? `<span class="chip house" title="${esc(HOUSE)} 대표주관 — 당사 계좌로 청약 가능">당사 주관</span>` : "";
 const srcChip = it => {
@@ -413,7 +416,7 @@ function header(){
   <nav class="nav gut" aria-label="메뉴"><div class="in" role="tablist">${TABS.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-tab="${k}">${l}</button>`).join("")}</div></nav>`;
 }
 function banners(){
-  const srcs = DATA.sources, bad = srcs.filter(s=>["error","blocked"].includes(s.status)), nc = srcs.filter(s=>s.status==="not_configured");
+  const srcs = DATA.sources.filter(s=>!OPTIONAL_SRC.test(s.source) || s.status==="ok"), bad = srcs.filter(s=>["error","blocked"].includes(s.status)), nc = srcs.filter(s=>s.status==="not_configured");
   const daysOld = Math.round((new Date(today+"T00:00:00") - new Date(DATA.meta.today+"T00:00:00"))/864e5);
   let h = "";
   if(daysOld > DATA.meta.stale_days) h += `<div class="banner err"><b>데이터가 ${daysOld}일 지났습니다</b><span>마지막 수집 ${esc(DATA.meta.today)}. ${ADMIN?"‘데이터 관리’에서 주간 자동 실행 상태를 확인하세요. ":""}일정이 바뀌었을 수 있으니 고객 안내 전에 DART 공시를 확인하세요.</span></div>`;
@@ -424,6 +427,11 @@ function banners(){
   return h;
 }
 
+function houseKpi(){
+  const days = weekRange(0), evs = calEvents().filter(e=>e.kind==="general" && e.start<=days[6] && (e.end||e.start)>=days[0] && isHouse(byUid[e.uid]));
+  const names = [...new Set(evs.map(e=>`${byUid[e.uid].name} ${EVENT[e.event]}`))];
+  return `<div class="kpi"><span class="lab">${HOUSE?"이번 주 당사 주관":"이번 주 상장"}</span><span class="val">${HOUSE?names.length:calEvents().filter(e=>e.event==="sched.listing"&&e.start>=days[0]&&e.start<=days[6]).length}<small> 건</small></span><span class="det">${HOUSE?(names.length?esc(names.join(", ")):"일정 없음"):"상장 예정 종목"}</span></div>`;
+}
 function weekRange(off){ const mon = addDays(today, -((new Date(today+"T00:00:00").getDay()+6)%7) + 7*off); return [...Array(7)].map((_,i)=>addDays(mon,i)); }
 function weekCompanies(days){
   const a = days[0], b = days[6];
@@ -447,26 +455,30 @@ function briefData(off){
   for(const k in groups) groups[k].sort((a,b)=>a.start.localeCompare(b.start) || a.name.localeCompare(b.name,"ko"));
   return {days, lo, hi, groups};
 }
+function sdate(e){ const a=e.start, b=e.end||e.start; const f=d=>`${Number(d.slice(5,7))}.${Number(d.slice(8))}`; return a===b ? f(a) : (a.slice(5,7)===b.slice(5,7) ? `${f(a)}~${Number(b.slice(8))}` : `${f(a)}~${f(b)}`); }
+function nameList(arr, max=4){ const u=[...new Set(arr)]; return u.length>max ? `${u.slice(0,max).join("·")} 외 ${u.length-max}` : u.join("·"); }
+/* 회의 요약: 일정 · 주목 · 당사 주관 · 유의 네 줄만. 주목·유의는 수요예측 숫자로만 고른다(전망 아님) */
 function briefSentences(off){
-  const {groups, lo, hi} = briefData(off), L = [], g = k => groups[k] || [];
-  const when = e => e.start===e.end ? md(e.start) : `${md(e.start)}~${md(e.end)}`;
-  const n = k => g(k).length;
-  const label = off===0?"이번 주":off===1?"다음 주":off===-1?"지난주":`${md(lo)} 주간`;
-  L.push(`${label}(${md(lo)}~${md(hi)}) 공모주 일정은 상장 ${n("sched.listing")}건, 청약 ${n("sched.subscription")}건, 수요예측 ${n("sched.demand_forecast")}건입니다.`);
-  if(n("sched.listing")) L.push("상장: " + g("sched.listing").map(e=>{ const c=byUid[e.uid]; const pf=perfTxt(c); return `${c.name} ${md(e.start)} — ${priceTxt(c)}${pf?`, ${pf}`:""}`; }).join(" / "));
-  if(n("sched.subscription")) L.push("청약: " + g("sched.subscription").map(e=>{ const c=byUid[e.uid]; const rt=ratioTxt(c); return `${c.name} ${when(e)} — ${priceTxt(c)}${rt?`, ${rt}`:""}, ${c.underwriters||"주관사 미확인"}`; }).join(" / "));
-  if(n("sched.demand_forecast")) L.push("수요예측: " + g("sched.demand_forecast").map(e=>`${byUid[e.uid].name} ${when(e)}`).join(", "));
-  if(n("sched.refund")) L.push("환불: " + g("sched.refund").map(e=>`${byUid[e.uid].name} ${md(e.start)}`).join(", "));
+  const {groups} = briefData(off), g = k => groups[k] || [], L = [];
+  const label = off===0?"이번 주":off===1?"다음 주":off===-1?"지난주":"이 주";
+  const part = (k, nm) => g(k).length ? `${nm} ${g(k).length}건(${nameList(g(k).map(e=>byUid[e.uid].name))})` : null;
+  const sched = [part("sched.listing","상장"), part("sched.subscription","청약"), part("sched.demand_forecast","수요예측")].filter(Boolean);
+  L.push(sched.length ? `${label} 일정: ${sched.join(", ")}` : `${label}에는 공모주 일정이 없습니다.`);
+  const active = [...new Set([...g("sched.subscription"), ...g("sched.listing")].map(e=>e.uid))].map(u=>byUid[u]).filter(Boolean);
+  const why = c => { const d=demandOf(c), a=[];
+    if(d.competition_ratio!=null) a.push(`수요예측 ${Math.round(d.competition_ratio).toLocaleString()}:1`);
+    const pos = bandPos(c); if(pos) a.push(pos.replace(/[()]/g,"")+" 확정");
+    if(d.lockup_ratio!=null && d.lockup_ratio>=0.1) a.push(`확약 ${pct(d.lockup_ratio,0)}`);
+    return a.join(", "); };
+  const top = active.filter(c=>c.demand_score!=null && c.demand_grade==="강함").sort((x,y)=>y.demand_score-x.demand_score).slice(0,2);
+  L.push(top.length ? `주목: ${top.map(c=>`${c.name}(${why(c)})`).join(", ")} — 기관 수요가 강했던 종목` : "주목: 이번 주 청약·상장 종목 중 수요예측 결과가 강하게 나온 종목은 아직 없습니다.");
   if(HOUSE){
-    const hs = [...new Set(Object.values(groups).flat().filter(e=>isHouse(byUid[e.uid])).map(e=>`${byUid[e.uid].name} ${EVENT[e.event]} ${when(e)}`))];
-    L.push(hs.length ? `당사(${HOUSE}) 주관: ${hs.join(", ")}` : `당사(${HOUSE}) 주관 일정은 없습니다.`);
+    const hs = [...new Set(Object.values(groups).flat().filter(e=>isHouse(byUid[e.uid])).map(e=>`${byUid[e.uid].name} ${EVENT[e.event]}(${sdate(e)})`))];
+    L.push(hs.length ? `당사 주관: ${hs.join(", ")}` : "당사 주관: 이번 주 일정 없음");
   }
-  const cos = [...new Set(Object.values(groups).flat().map(e=>e.uid))].map(u=>byUid[u]);
-  const strong = cos.filter(c=>c.demand_grade==="강함").map(c=>c.name), weak = cos.filter(c=>c.demand_grade==="약함").map(c=>c.name);
-  if(strong.length) L.push(`기관 수요가 강했던 종목: ${strong.join(", ")}`);
-  if(weak.length) L.push(`기관 수요가 약했던 종목(유의): ${weak.join(", ")}`);
-  const hi_ = cos.filter(c=>c.verdict==="상대적 고평가 가능성").map(c=>c.name);
-  if(hi_.length) L.push(`적정가 대비 공모가가 높을 수 있는 종목(내부 참고): ${hi_.join(", ")}`);
+  const warn = active.filter(c=>c.demand_grade==="약함" || /하단/.test(bandPos(c)) || c.verdict==="상대적 고평가 가능성").slice(0,2)
+    .map(c=>`${c.name}(${[c.demand_grade==="약함"?"기관 수요 약함":"", /하단/.test(bandPos(c))?"공모가 하단 확정":"", c.verdict==="상대적 고평가 가능성"?"적정가 대비 높을 수 있음":""].filter(Boolean).join(", ")})`);
+  if(warn.length) L.push(`유의: ${warn.join(", ")}`);
   return L;
 }
 function briefLastWeek(){
@@ -501,7 +513,7 @@ function briefTab(){
       <button class="btn pri" data-briefcopy>회의용 텍스트 복사</button><button class="btn" data-briefprint>인쇄(A4)</button></div></div>
     <div class="cb">
       <div class="bcount">${cnt}${HOUSE?`<span>당사 주관<b>${[...new Set(Object.values(groups).flat().filter(e=>isHouse(byUid[e.uid])).map(e=>e.uid))].length}</b></span>`:""}</div>
-      <section class="bgrp"><h3>회의 요약 <span class="muted small" style="font-weight:400">그대로 읽어도 되는 문장 · 수집 자료 기준</span></h3><ol class="bsum">${briefSentences(off).map(t=>`<li>${esc(t)}</li>`).join("")}</ol></section>
+      <section class="bgrp"><h3>회의 요약 <span class="muted small" style="font-weight:400">수집 자료 기준 · 주목·유의는 수요예측 숫자로만 고름(주가 전망 아님)</span></h3><ol class="bsum">${briefSentences(off).map(t=>`<li>${esc(t)}</li>`).join("")}</ol></section>
       ${total?BRIEF_ORDER.filter(k=>(groups[k]||[]).length).map(k=>`<section class="bgrp"><h3>${EVENT[k]} <span class="muted small" style="font-weight:400">${groups[k].length}건</span></h3>${groups[k].map(briefItem).join("")}</section>`).join("")
         :`<div class="empty"><b>이 주에는 일반기업 공모 일정이 없습니다</b><span>앞뒤 주로 넘겨 보세요.</span></div>`}
       ${off===0?briefLastWeek():""}
@@ -595,7 +607,7 @@ function kpis(){
     <div class="kpi"><span class="lab">향후 90일 상장 예정</span><span class="val">${k.upcoming_90d}<small> 곳</small></span><span class="det">일정 미정·연기 ${k.watch_undated}곳 별도 관찰${k.spac_reits_hidden?` · 스팩·리츠 ${k.spac_reits_hidden}곳 제외`:""}</span></div>
     <div class="kpi"><span class="lab">이번 주 청약·수요예측</span><span class="val">${wk.length}<small> 건</small></span><span class="det">~${md(DATA.meta.week_end)} · ${wk.length?esc(wk.slice(0,4).join(", "))+(wk.length>4?` 외 ${wk.length-4}건`:""):"일정 없음"}</span></div>
     <div class="kpi"><span class="lab">최근 7일 신규 · 변경</span><span class="val">${k.new_7d}<small> 신규</small> ${k.changed_7d}<small> 변경</small></span><span class="det">일정 변경·공모가 확정·정정·연기·철회</span></div>
-    <div class="kpi"><span class="lab">관심도 급상승</span><span class="val">${k.spikes.length}<small> 곳</small></span><span class="det">${k.spikes.length?esc(k.spikes.join(", ")):"뉴스·커뮤니티 미연결로 산출 불가"}</span></div>
+    ${!BUZZ?houseKpi():`<div class="kpi"><span class="lab">관심도 급상승</span><span class="val">${k.spikes.length}<small> 곳</small></span><span class="det">${k.spikes.length?esc(k.spikes.join(", ")):"뉴스·커뮤니티 미연결로 산출 불가"}</span></div>`}
   </div>`;
 }
 function changesMini(){
@@ -615,7 +627,7 @@ function brief(){
         <span class="dates">${Object.entries(p.dates).map(([k,v])=>`${EVENT[k]} ${rng(v)}`).join(" · ")}</span>
         <span class="lbl">주목 이유</span><ul>${p.why.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>
         ${p.watch_out.length?`<span class="lbl">유의할 점</span><ul>${p.watch_out.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>`:""}
-        <span class="small muted">가치평가 ${esc(p.valuation)} · 관심도 ${p.interest==null?"산출 불가":p.interest} · 신뢰도 ${esc(p.reliability)}</span>
+        <span class="small muted">가치평가 ${esc(p.valuation)} ${BUZZ?` · 관심도 ${p.interest==null?"산출 불가":p.interest}`:""} · 신뢰도 ${esc(p.reliability)}</span>
       </button>`).join("")}</div>`:`<div class="empty"><b>이번 주 일정이 있는 일반기업이 없습니다</b></div>`}
     <div class="mini">
       <div><h3>신규 발견</h3>${list(b.new_companies, x=>`<li>${esc(x.name)}</li>`)}</div>
@@ -636,7 +648,7 @@ function filterBar(){
     <label>업종 <select id="f-sector">${opt("","전체",S.sector)}${sectors.map(s=>opt(s,s,S.sector)).join("")}</select></label>
     <label>단계 <select id="f-stage">${opt("","전체",S.stage)}${[["subscription","청약 임박·진행"],["demand_forecast","수요예측"],["filed","신고서 제출"],["pre_listing","상장 대기"],["watch","관찰(일정 미정)"],["postponed","연기"]].map(([v,l])=>opt(v,l,S.stage)).join("")}</select></label>
     <label>가치평가 <select id="f-verdict">${opt("","전체",S.verdict)}${Object.keys(VCLASS).map(v=>opt(v,v,S.verdict)).join("")}</select></label>
-    <label>관심도 ≥ <select id="f-int">${opt("","전체",S.minInterest)}${["40","60","80"].map(v=>opt(v,v,S.minInterest)).join("")}</select></label>
+    ${!BUZZ?"":`<label>관심도 ≥ <select id="f-int">${opt("","전체",S.minInterest)}${["40","60","80"].map(v=>opt(v,v,S.minInterest)).join("")}</select></label>`}
     <label><input type="checkbox" id="f-soon" ${S.soon?"checked":""}> 7일 내 청약</label>
     ${HOUSE?`<label><input type="checkbox" id="f-house" ${S.onlyHouse?"checked":""}> 당사 주관만</label>`:""}
     <label><input type="checkbox" id="f-watch" ${S.onlyWatch?"checked":""}> 관심종목만</label>
@@ -659,7 +671,7 @@ function listTab(){
       <td>${esc(c.sector||"미분류")}</td>
       <td><span class="chip ${STAGE_CLASS[c.stage]||"line"}">${esc(c.stage_label)}</span></td>
       <td class="num">${rng(c.sched["sched.subscription"])}</td>
-      <td>${price}</td><td>${mc}</td><td>${demandChip(c)}<span class="src">관심도 ${intr}</span></td>
+      <td>${price}</td><td>${mc}</td><td>${demandChip(c)}${BUZZ?`<span class="src">관심도 ${intr}</span>`:""}</td>
       <td>${fairChip(c)}</td>
       <td><span class="chip ${REL_CLASS[c.reliability]||"hold"}">${esc(c.reliability)}</span></td>
       <td class="num small">${esc(ago(c.last_updated))}${c.stale?` <span class="chip bad">오래됨</span>`:""}</td></tr>`;
@@ -738,38 +750,39 @@ function calcRes(){
 
 function compareTab(){
   const rs = rows().filter(c=>S.kind===""||c.kind===S.kind);
-  const pts = rs.filter(c=>c.interest_score!=null && c.verdict_premium!=null);
-  const miss = rs.filter(c=>!(c.interest_score!=null && c.verdict_premium!=null));
+  const XK = BUZZ ? "interest_score" : "demand_score", XN = BUZZ ? "관심도" : "기관 수요 강도";
+  const pts = rs.filter(c=>c[XK]!=null && c.verdict_premium!=null);
+  const miss = rs.filter(c=>!(c[XK]!=null && c.verdict_premium!=null));
   let chart;
   if(pts.length){
     const W=640,H=330,L=56,R=20,T=16,B=44;
     const ymax = Math.ceil(Math.max(0.2, ...pts.map(p=>Math.abs(p.verdict_premium)))*1.2*10)/10;
     const x = v => L + (v/100)*(W-L-R), y = v => T + (1 - (v+ymax)/(2*ymax))*(H-T-B);
-    chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="관심도와 공모가 할증률 산점도">
+    chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${XN}와 공모가 할증률 산점도">
       ${[0,25,50,75,100].map(v=>`<line class="grid" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${H-B}"/><text x="${x(v)}" y="${H-B+16}" text-anchor="middle">${v}</text>`).join("")}
       ${[-ymax,-ymax/2,0,ymax/2,ymax].map(v=>`<line class="${v===0?"axis":"grid"}" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v>0?"+":""}${Math.round(v*100)}%</text>`).join("")}
-      <text x="${(L+W-R)/2}" y="${H-6}" text-anchor="middle">관심도 점수 (0~100, 화제성 지표)</text>
+      <text x="${(L+W-R)/2}" y="${H-6}" text-anchor="middle">${BUZZ?"관심도 점수 (0~100, 화제성 지표)":"기관 수요 강도 (0~100, 수요예측 결과)"}</text>
       <text x="14" y="${(T+H-B)/2}" text-anchor="middle" transform="rotate(-90 14 ${(T+H-B)/2})">공모가 ÷ 기준가치 − 1</text>
       <text x="${L+6}" y="${T+12}">↑ 비교기업 대비 공모가 비쌈</text><text x="${L+6}" y="${H-B-6}">↓ 비교기업 대비 공모가 쌈</text>
-      ${pts.map(p=>{ const px=x(p.interest_score), py=y(p.verdict_premium), right=p.interest_score>85; return `<g data-open="${p.uid}" style="cursor:pointer" data-tip="${esc(p.name)}|관심도 ${p.interest_score}|기준가치 대비 ${sgn(p.verdict_premium)}|${esc(p.verdict)}">
+      ${pts.map(p=>{ const px=x(p[XK]), py=y(p.verdict_premium), right=p[XK]>85; return `<g data-open="${p.uid}" style="cursor:pointer" data-tip="${esc(p.name)}|${XN} ${Math.round(p[XK])}|기준가치 대비 ${sgn(p.verdict_premium)}|${esc(p.verdict)}">
         <circle cx="${px}" cy="${py}" r="14" fill="transparent"/><circle cx="${px}" cy="${py}" r="5" fill="var(--brand-2)" stroke="var(--surface)" stroke-width="2"/>
         <text x="${px+(right?-8:8)}" y="${py-8}" text-anchor="${right?"end":"start"}" style="fill:var(--ink-2)">${esc(p.name.replace("[예시] ",""))}</text></g>`; }).join("")}
     </svg>`;
   } else {
-    chart = `<div class="empty"><b>관심도와 가치평가가 모두 산출된 기업이 없습니다</b><span>뉴스 수집과 재무·비교기업 자료가 연결되면 표시됩니다. 상단 ‘예시 데이터 보기’로 화면 구성을 확인할 수 있습니다.</span></div>`;
+    chart = `<div class="empty"><b>${XN}와 가치평가가 모두 산출된 기업이 없습니다</b><span>${BUZZ?"뉴스 수집과":"수요예측 결과와"} 재무·비교기업 자료가 연결되면 표시됩니다. 상단 ‘예시 데이터 보기’로 화면 구성을 확인할 수 있습니다.</span></div>`;
   }
   const sel = [...S.sel].map(u=>byUid[u]).filter(Boolean);
   const cmpRows = [["단계",c=>c.stage_label],["주관사",c=>c.underwriters||"미확인"],["청약일",c=>rng(c.sched["sched.subscription"])],["공모가",c=>c.price_final!=null?won(c.price_final)+" (확정)":c.price_band?`${c.price_band.low.toLocaleString()}~${c.price_band.high.toLocaleString()}원`:"미공개"],
-    ["예상 시가총액",c=>c.market_cap?krw(c.market_cap.low)+(c.market_cap.high!==c.market_cap.low?"~"+krw(c.market_cap.high):""):"자료 부족"],["관심도",c=>c.interest_score??"산출 불가"],
+    ["예상 시가총액",c=>c.market_cap?krw(c.market_cap.low)+(c.market_cap.high!==c.market_cap.low?"~"+krw(c.market_cap.high):""):"자료 부족"],...(BUZZ?[["관심도",c=>c.interest_score??"산출 불가"]]:[]),
     ["적정가 판정",c=>c.verdict+(c.verdict_provisional?" (잠정)":"")],["적정 공모가 범위",c=>c.fair_range?`${Math.round(c.fair_range.low).toLocaleString()}~${Math.round(c.fair_range.high).toLocaleString()}원`:"–"],["실효 할인율",c=>c.eff_discount!=null?pct(c.eff_discount,1):"–"],["매출 성장(CAGR)",c=>pct(((DATA.reports[c.uid]||{}).ratios||{}).revenue_cagr)],["영업이익률",c=>pct(((DATA.reports[c.uid]||{}).ratios||{}).op_margin)],
     ["유통가능물량",c=>pct(((DATA.reports[c.uid]||{}).supply||{}).float_ratio,1)],["기관 수요 강도",c=>c.demand_score!=null?`${Math.round(c.demand_score)}점 (${c.demand_grade})`:"수요예측 전"],["참고 포인트",c=>c.points.map(p=>p.text).join(" / ")||"근거 부족"],["유의 사항",c=>c.risks.map(p=>p.text).join(" / ")||"근거 부족"],["데이터 신뢰도",c=>c.reliability]];
   return `<section class="card"><div class="ch"><h2>공모가 적정성 비교</h2><span class="muted small">주관사 산정 근거를 확인 실적 기준으로 재계산 · 할인 폭 큰 순</span></div><div class="cb">${valueTable()}</div></section>
   <section class="card"><div class="ch"><h2>기업 간 비교</h2><span class="muted small">공모주 목록에서 체크한 기업 (${sel.length})</span></div><div class="cb">
     ${sel.length?`<div class="tbl-wrap"><table><thead><tr><th>항목</th>${sel.map(c=>`<th>${esc(c.name)}</th>`).join("")}</tr></thead><tbody>${cmpRows.map(([l,f])=>`<tr><td class="muted">${l}</td>${sel.map(c=>`<td>${esc(f(c))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
       :`<div class="empty"><b>비교할 기업을 선택하세요</b><span>‘공모주 목록’에서 왼쪽 체크박스로 2~4곳을 고르면 나란히 표시됩니다.</span><button class="btn" data-tab="list">공모주 목록으로</button></div>`}</div></section>
-  <section class="card"><div class="ch"><h2>관심도 × 공모가 상대 수준</h2><span class="muted small">점을 누르면 상세 · 관심도는 주가 상승 확률이 아닙니다</span></div><div class="cb">
+  <section class="card"><div class="ch"><h2>${XN} × 공모가 상대 수준</h2><span class="muted small">점을 누르면 상세 · ${XN}는 주가 상승 확률이 아닙니다</span></div><div class="cb">
     <div style="max-width:760px">${chart}</div>
-    ${miss.length?`<details><summary>차트에 없는 기업 ${miss.length}곳과 사유</summary><ul class="small">${miss.map(c=>`<li>${esc(c.name)} — ${[c.interest_score==null?"관심도 산출 불가":"", c.verdict_premium==null?`가치평가 ${c.verdict}`:""].filter(Boolean).map(esc).join(", ")}</li>`).join("")}</ul></details>`:""}</div></section>`;
+    ${miss.length?`<details><summary>차트에 없는 기업 ${miss.length}곳과 사유</summary><ul class="small">${miss.map(c=>`<li>${esc(c.name)} — ${[c[XK]==null?(BUZZ?"관심도 산출 불가":"수요예측 결과 없음"):"", c.verdict_premium==null?`가치평가 ${c.verdict}`:""].filter(Boolean).map(esc).join(", ")}</li>`).join("")}</ul></details>`:""}</div></section>`;
 }
 
 const CT = {new:["신규 발견","info"],schedule_change:["일정 변경","warn"],price_fixed:["공모가 확정","good"],amendment:["정정공시","warn"],withdrawn:["철회","bad"],postponed:["연기·목록 이탈","bad"],fact_change:["정보 변경","line"],new_risk:["새 위험요인","bad"],source_conflict:["출처 불일치","warn"]};
@@ -815,21 +828,21 @@ function sourcesTab(){
   try{ stages = JSON.parse(lr.stages||"{}"); }catch(e){}
   return `${accessCard()}<section class="card"><div class="ch"><h2>자료원 연결 상태</h2><span class="muted small">실패한 자료원은 기존 데이터를 유지하고 마지막 성공 시각을 표시합니다</span></div><div class="cb">
   <div class="tbl-wrap"><table><thead><tr><th>자료원</th><th>상태</th><th>마지막 성공</th><th>마지막 시도</th><th>연속 실패</th><th>필요한 조치</th><th>오류 내용</th></tr></thead><tbody>
-  ${DATA.sources.map(s=>`<tr><td>${esc(SNAME[s.source]||s.source)}</td><td><span class="chip ${(SST[s.status]||["","hold"])[1]}">${esc((SST[s.status]||[s.status])[0])}</span></td>
+  ${DATA.sources.map(s=>{ const opt = OPTIONAL_SRC.test(s.source) && s.status!=="ok"; return `<tr${opt?' class="muted"':""}><td>${esc(SNAME[s.source]||s.source)}${opt?' <span class="small">(선택 기능)</span>':""}</td><td><span class="chip ${opt?"line":(SST[s.status]||["","hold"])[1]}">${opt?"사용 안 함":esc((SST[s.status]||[s.status])[0])}</span></td>
     <td class="num small">${s.last_success?esc(ago(s.last_success)):"없음"}</td><td class="num small">${esc(ago(s.last_attempt))}</td><td class="num">${s.consecutive_failures}</td>
-    <td class="small">${esc(s.status==="ok"?"–":(NEED[s.source]||""))}</td><td class="small muted">${esc((s.last_error||"").slice(0,100))}</td></tr>`).join("")}
+    <td class="small">${esc(s.status==="ok"?"–":(NEED[s.source]||""))}</td><td class="small muted">${opt?"키를 넣으면 관심도(뉴스·영상 반응)가 켜집니다":esc((s.last_error||"").slice(0,100))}</td></tr>`; }).join("")}
   </tbody></table></div></div></section>
   <section class="card"><div class="ch"><h2>최근 자동 실행</h2><span class="muted small">${lr?esc(lr.run_id):""} · 다음 실행 매일 07:30</span></div><div class="cb">
     ${lr?`<div class="tbl-wrap"><table><thead><tr><th>단계</th><th>결과</th><th>소요</th><th>비고</th></tr></thead><tbody>${Object.entries(stages).map(([k,v])=>`<tr><td>${esc(k)}</td><td><span class="chip ${v.status==="error"?"bad":v.degraded?"warn":"good"}">${v.status==="error"?"오류":v.degraded?"일부 실패":"정상"}</span></td><td class="num">${v.seconds}s</td><td class="small">${esc((v.error||"").slice(0,120))}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">실행 기록 없음</div>`}
   </div></section>
-  <section class="card"><div class="ch"><h2>관심도 점수 산식</h2></div><div class="cb small" style="max-width:76ch">
+  ${!BUZZ?"":`<section class="card"><div class="ch"><h2>관심도 점수 산식</h2></div><div class="cb small" style="max-width:76ch">
       <div><b>점수</b> = Σ(가중치 × 구성요소 점수) ÷ Σ(산출 가능한 구성요소의 가중치). 산출 가능한 가중치 합이 50% 미만이면 점수를 내지 않습니다.</div>
       <div><b>언급량 ${pct(DATA.meta.weights.volume)}</b> 뉴스·블로그·카페를 채널별로 정규화(최근 7일 고유 문서 수, 로그 척도, 같은 단계 비교집단 대비)한 뒤 가중 평균합니다.</div>
       <div><b>증가세 ${pct(DATA.meta.weights.growth)}</b> ln((최근 7일 + ${DATA.meta.growth_prior}) ÷ (직전 7일 + ${DATA.meta.growth_prior}))를 50 + 50·tanh(x/ln3)로 바꿉니다. 표본이 적을 때의 급증을 누그러뜨립니다.</div>
       <div><b>출처 다양성 ${pct(DATA.meta.weights.diversity)}</b> 30일 고유 매체·커뮤니티의 유효 개수(엔트로피 기반).</div>
       <div><b>참여도 ${pct(DATA.meta.weights.engagement)}</b> 조회·댓글·추천이 공개된 글만 씁니다. 없으면 ‘산출 불가’로 두고 가중치를 재배분합니다.</div>
       <div>전재·복사 기사는 한 건으로 세고, 동명이인·관계사·IPO 맥락이 없는 글은 제외합니다. 감성은 점수와 따로 표시합니다.</div>
-  </div></section>`;
+  </div></section>`}`;
 }
 
 function finTable(item){
@@ -1170,7 +1183,8 @@ function detail(uid){
   const R = refsBox();
   const mc = r.market_cap_estimate;
   const sub = c.sched["sched.subscription"];
-  const DT = [["overview","기업 개요"],["study","공부 노트"],["fin","재무"],["offer","공모·일정"],["value","적정가 분석"],["deep","시장 반응"]];
+  const DT = [["overview","기업 개요"],["study","공부 노트"],["fin","재무"],["offer","공모·일정"],["value","적정가 분석"],...(BUZZ?[["deep","시장 반응"]]:[])];
+  if(!BUZZ && S.dtab==="deep") S.dtab = "overview";
   const body = {fin:tabFinance,offer:tabOffer,study:tabStudy,value:tabValue}[S.dtab] ? {fin:tabFinance,offer:tabOffer,study:tabStudy,value:tabValue}[S.dtab](c,r,R) : S.dtab==="deep"?tabMarket(c,r,uid):tabOverview(c,r,R);
   const evs = DATA.calendar.filter(e=>e.uid===uid);
   return `<div class="panel-h">
