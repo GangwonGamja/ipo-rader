@@ -246,7 +246,24 @@ ol.study.good li::marker{color:var(--good);font-weight:700} ol.study.bad li::mar
 :root[data-brand]{--bg:#f6f4f1;--surface:#ffffff;--surface-2:#f2eeea;--line:#e4ddd5;--line-strong:#cfc4b8;--ink:#231815;--ink-2:#5a4c44;--ink-3:#8a7c72;
   --brand:#692c00;--brand-2:#8a4a1c;--brand-soft:#f6ebe1;--gold:#b8873f;--good:#1e7a4c;--good-soft:#e3f2ea;--warn:#a35a00;--warn-soft:#fcefd8;--bad:#b3261e;--bad-soft:#fbe4e1;
   --hold:#6b6460;--hold-soft:#eeebe8;--sample:#5b47b8;--sample-soft:#edeafa;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#8a94a3;--s5:#e87ba4;--s6:#692c00;color-scheme:light}
+.bsum{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14.5px;line-height:1.6}
+.bcount{display:flex;gap:8px;flex-wrap:wrap}
+.bcount span{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--surface);font-size:13px}
+.bcount b{font-family:var(--f-num);font-size:18px;margin-left:4px}
+.bgrp{display:grid;gap:8px}
+.bgrp h3{font-size:14px;margin:6px 0 0;display:flex;gap:8px;align-items:center}
+.bitem{border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:6px;padding:10px 12px;display:grid;gap:4px;background:var(--surface)}
+.bitem.house{border-left-color:var(--brand)}
+.bitem .bt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.bitem .bt b{font-size:15px}
+.bitem .bk{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
+.bitem .bk em{font-style:normal;color:var(--ink);font-family:var(--f-num)}
+.bitem ul{margin:2px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2)}
 @media print{
+  body.pbrief main{display:block!important}
+  body.pbrief #kpibar,body.pbrief #banners,body.pbrief .foot,body.pbrief #srvbar,body.pbrief .bno-print{display:none!important}
+  body.pbrief .card{border:0;box-shadow:none}
+  body.pbrief .bitem{break-inside:avoid}
   body{background:#fff}
   .hd,.nav,main,.scrim,.no-print,.tip,.toast{display:none!important}
   aside.panel{position:static;width:auto;overflow:visible;border:0;padding:0;animation:none}
@@ -380,7 +397,7 @@ function csvFor(list){
   return "﻿" + [h.map(q).join(","), ...lines].join("\r\n");
 }
 
-const TABS = [["home","이번 주"],["list","공모주 목록"],["calendar","청약 캘린더"],["compare","적정가 비교"],["calc","증거금 계산기"],["changes","변경 이력"]]
+const TABS = [["home","이번 주"],["brief","주간 브리핑"],["list","공모주 목록"],["calendar","청약 캘린더"],["compare","적정가 비교"],["calc","증거금 계산기"],["changes","변경 이력"]]
   .concat(ADMIN ? [["sources","데이터 관리 · 관리자"]] : []);
 if(!TABS.some(([k])=>k===S.tab)) S.tab = "home";
 function header(){
@@ -415,6 +432,106 @@ function weekCompanies(days){
     return {c, evs};
   }).filter(x=>x.evs.length).sort((x,y)=>((x.evs.find(e=>e.k==="sched.subscription")||x.evs[0]).v.start||"") < ((y.evs.find(e=>e.k==="sched.subscription")||y.evs[0]).v.start||"") ? -1 : 1);
 }
+/* ---------- 주간 브리핑: 아침 회의용 정리 ---------- */
+const BRIEF_ORDER = ["sched.listing","sched.subscription","sched.refund","sched.price_fix","sched.demand_forecast"];
+function demandOf(c){ return ((DATA.reports[c.uid]||{}).demand)||{}; }
+function priceTxt(c){ return c.price_final!=null ? `확정 ${won(c.price_final)}` : c.price_band ? `희망 ${Number(c.price_band.low).toLocaleString()}~${won(c.price_band.high)}` : "공모가 미정"; }
+function bandPos(c){ if(c.price_final==null||!c.price_band) return ""; const {low,high}=c.price_band; return c.price_final>high?"(상단 초과)":c.price_final===high?"(상단)":c.price_final<low?"(하단 미만)":c.price_final===low?"(하단)":"(범위 내)"; }
+function ratioTxt(c){ const d=demandOf(c); const parts=[]; if(d.competition_ratio!=null) parts.push(`수요예측 ${Number(d.competition_ratio).toLocaleString()}:1`); if(d.lockup_ratio!=null) parts.push(`확약 ${pct(d.lockup_ratio,1)}`); if(d.sub_ratio!=null) parts.push(`청약 ${Number(d.sub_ratio).toLocaleString()}:1`); return parts.join(" · "); }
+function perfTxt(c){ const p=c.perf; if(!p) return ""; const r=v=>v==null?null:`${v>=0?"+":""}${(v*100).toFixed(1)}%`; const a=[]; if(r(p.open_ret)) a.push(`시초가 ${r(p.open_ret)}`); if(r(p.close1_ret)) a.push(`첫날 종가 ${r(p.close1_ret)}`); if(r(p.last_ret)&&p.last_date!==p.day1_date) a.push(`최근 ${r(p.last_ret)}`); return a.length?`공모가 대비 ${a.join(", ")}`:""; }
+function briefData(off){
+  const days = weekRange(off), lo = days[0], hi = days[6];
+  const evs = calEvents().filter(e=>e.kind==="general" && e.start<=hi && (e.end||e.start)>=lo);
+  const groups = {};
+  for(const e of evs){ (groups[e.event] = groups[e.event] || []).push(e); }
+  for(const k in groups) groups[k].sort((a,b)=>a.start.localeCompare(b.start) || a.name.localeCompare(b.name,"ko"));
+  return {days, lo, hi, groups};
+}
+function briefSentences(off){
+  const {groups, lo, hi} = briefData(off), L = [], g = k => groups[k] || [];
+  const when = e => e.start===e.end ? md(e.start) : `${md(e.start)}~${md(e.end)}`;
+  const n = k => g(k).length;
+  const label = off===0?"이번 주":off===1?"다음 주":off===-1?"지난주":`${md(lo)} 주간`;
+  L.push(`${label}(${md(lo)}~${md(hi)}) 공모주 일정은 상장 ${n("sched.listing")}건, 청약 ${n("sched.subscription")}건, 수요예측 ${n("sched.demand_forecast")}건입니다.`);
+  if(n("sched.listing")) L.push("상장: " + g("sched.listing").map(e=>{ const c=byUid[e.uid]; const pf=perfTxt(c); return `${c.name} ${md(e.start)} — ${priceTxt(c)}${pf?`, ${pf}`:""}`; }).join(" / "));
+  if(n("sched.subscription")) L.push("청약: " + g("sched.subscription").map(e=>{ const c=byUid[e.uid]; const rt=ratioTxt(c); return `${c.name} ${when(e)} — ${priceTxt(c)}${rt?`, ${rt}`:""}, ${c.underwriters||"주관사 미확인"}`; }).join(" / "));
+  if(n("sched.demand_forecast")) L.push("수요예측: " + g("sched.demand_forecast").map(e=>`${byUid[e.uid].name} ${when(e)}`).join(", "));
+  if(n("sched.refund")) L.push("환불: " + g("sched.refund").map(e=>`${byUid[e.uid].name} ${md(e.start)}`).join(", "));
+  if(HOUSE){
+    const hs = [...new Set(Object.values(groups).flat().filter(e=>isHouse(byUid[e.uid])).map(e=>`${byUid[e.uid].name} ${EVENT[e.event]} ${when(e)}`))];
+    L.push(hs.length ? `당사(${HOUSE}) 주관: ${hs.join(", ")}` : `당사(${HOUSE}) 주관 일정은 없습니다.`);
+  }
+  const cos = [...new Set(Object.values(groups).flat().map(e=>e.uid))].map(u=>byUid[u]);
+  const strong = cos.filter(c=>c.demand_grade==="강함").map(c=>c.name), weak = cos.filter(c=>c.demand_grade==="약함").map(c=>c.name);
+  if(strong.length) L.push(`기관 수요가 강했던 종목: ${strong.join(", ")}`);
+  if(weak.length) L.push(`기관 수요가 약했던 종목(유의): ${weak.join(", ")}`);
+  const hi_ = cos.filter(c=>c.verdict==="상대적 고평가 가능성").map(c=>c.name);
+  if(hi_.length) L.push(`적정가 대비 공모가가 높을 수 있는 종목(내부 참고): ${hi_.join(", ")}`);
+  return L;
+}
+function briefLastWeek(){
+  const {groups} = briefData(-1);
+  const listed = (groups["sched.listing"]||[]).map(e=>byUid[e.uid]).filter(Boolean);
+  const df = (groups["sched.demand_forecast"]||[]).map(e=>byUid[e.uid]).filter(c=>c && (demandOf(c).competition_ratio!=null || c.price_final!=null));
+  if(!listed.length && !df.length) return "";
+  return `<section class="bgrp"><h3>지난주 결과</h3>
+    ${listed.map(c=>`<div class="bitem${isHouse(c)?" house":""}"><div class="bt"><b>${esc(c.name)}</b><span class="chip line">상장</span>${houseChip(c)}</div>
+      <div class="bk"><span>공모가 <em>${c.price_final!=null?won(c.price_final):"미확인"}</em></span><span>${perfTxt(c)||"상장 후 성과: KRX 연결 후 표시"}</span></div></div>`).join("")}
+    ${df.map(c=>`<div class="bitem${isHouse(c)?" house":""}"><div class="bt"><b>${esc(c.name)}</b><span class="chip line">수요예측 결과</span>${houseChip(c)}</div>
+      <div class="bk"><span>${esc(priceTxt(c))} ${bandPos(c)}</span>${ratioTxt(c)?`<span>${esc(ratioTxt(c))}</span>`:""}${c.demand_grade?`<span>기관 수요 <em>${esc(c.demand_grade)}</em></span>`:""}</div></div>`).join("")}
+  </section>`;
+}
+function briefItem(e){
+  const c = byUid[e.uid]; if(!c) return "";
+  const rt = ratioTxt(c), pf = perfTxt(c);
+  const pts = (c.points||[]).slice(0,2).map(p=>p.text), rks = (c.risks||[]).slice(0,2).map(p=>p.text);
+  return `<div class="bitem${isHouse(c)?" house":""}"><div class="bt"><b>${esc(c.name)}</b><span class="num">${e.start===e.end?md(e.start):`${md(e.start)}~${md(e.end)}`}</span>${houseChip(c)}${c.is_sample?`<span class="chip sample">예시</span>`:""}<span class="muted small">${esc(c.sector||"")}</span></div>
+    ${c.summary?`<div class="small">${esc(c.summary)}</div>`:""}
+    <div class="bk"><span>공모가 <em>${esc(priceTxt(c))}</em> ${bandPos(c)}</span>${rt?`<span>${esc(rt)}</span>`:""}${c.demand_grade?`<span>기관 수요 <em>${esc(c.demand_grade)}</em></span>`:""}<span>적정가 <em>${esc(c.verdict)}</em></span><span>주관 ${esc(c.underwriters||"미확인")}</span>${c.min_subscription?`<span>최소 ${Number(c.min_subscription).toLocaleString()}주</span>`:""}${pf?`<span>${esc(pf)}</span>`:""}</div>
+    ${pts.length||rks.length?`<ul>${pts.map(t=>`<li>포인트: ${esc(t)}</li>`).join("")}${rks.map(t=>`<li>유의: ${esc(t)}</li>`).join("")}</ul>`:""}
+  </div>`;
+}
+function briefTab(){
+  const off = S.bweek||0, {groups, lo, hi} = briefData(off);
+  const label = off===0?"이번 주":off===1?"다음 주":off===-1?"지난주":`${off>0?"+":""}${off}주`;
+  const total = Object.values(groups).reduce((a,v)=>a+v.length,0);
+  const cnt = BRIEF_ORDER.map(k=>`<span>${EVENT[k]}<b>${(groups[k]||[]).length}</b></span>`).join("");
+  return `<section class="card"><div class="ch"><h2>주간 IPO 브리핑 <span class="muted small" style="font-weight:500">${label} · ${md(lo)}~${md(hi)}</span></h2>
+      <div class="btns bno-print"><button class="btn" data-bweek="-1" aria-label="이전 주">◀</button><button class="btn ${off===0?"pri":""}" data-bweek="0">이번 주</button><button class="btn" data-bweek="1" aria-label="다음 주">▶</button>
+      <button class="btn pri" data-briefcopy>회의용 텍스트 복사</button><button class="btn" data-briefprint>인쇄(A4)</button></div></div>
+    <div class="cb">
+      <div class="bcount">${cnt}${HOUSE?`<span>당사 주관<b>${[...new Set(Object.values(groups).flat().filter(e=>isHouse(byUid[e.uid])).map(e=>e.uid))].length}</b></span>`:""}</div>
+      <section class="bgrp"><h3>회의 요약 <span class="muted small" style="font-weight:400">그대로 읽어도 되는 문장 · 수집 자료 기준</span></h3><ol class="bsum">${briefSentences(off).map(t=>`<li>${esc(t)}</li>`).join("")}</ol></section>
+      ${total?BRIEF_ORDER.filter(k=>(groups[k]||[]).length).map(k=>`<section class="bgrp"><h3>${EVENT[k]} <span class="muted small" style="font-weight:400">${groups[k].length}건</span></h3>${groups[k].map(briefItem).join("")}</section>`).join("")
+        :`<div class="empty"><b>이 주에는 일반기업 공모 일정이 없습니다</b><span>앞뒤 주로 넘겨 보세요.</span></div>`}
+      ${off===0?briefLastWeek():""}
+      <p class="muted small">공개 자료·공시를 정리한 내부 회의용 자료입니다. 적정가 판정과 기관 수요 강도는 내부 참고 지표로 고객에게 투자 권유로 전달하지 마세요. 일정·공모가는 투자설명서와 주관사 공지로 최종 확인하세요. 생성 ${esc(DATA.meta.generated_at)}</p>
+    </div></section>`;
+}
+function briefPlain(){
+  const off = S.bweek||0, {groups, lo, hi} = briefData(off), L = [];
+  L.push(`[주간 IPO 브리핑] ${md(lo)}~${md(hi)}${BRAND?` · ${BRAND.house} ${BRAND.branch}`:""}`);
+  L.push(""); briefSentences(off).forEach((t,i)=>L.push(`${i+1}. ${t}`));
+  for(const k of BRIEF_ORDER){
+    const g = groups[k]||[]; if(!g.length) continue;
+    L.push(""); L.push(`■ ${EVENT[k]} (${g.length}건)`);
+    for(const e of g){ const c=byUid[e.uid]; if(!c) continue;
+      const rt=ratioTxt(c), pf=perfTxt(c);
+      L.push(`- ${c.name}${isHouse(c)?" [당사 주관]":""} ${e.start===e.end?md(e.start):`${md(e.start)}~${md(e.end)}`} | ${priceTxt(c)}${bandPos(c)?" "+bandPos(c):""}${rt?` | ${rt}`:""} | 주관 ${c.underwriters||"미확인"}${pf?` | ${pf}`:""}`);
+    }
+  }
+  L.push(""); L.push("※ 내부 회의용. 적정가 판정·기관 수요 강도는 참고 지표이며 투자 권유가 아닙니다. 일정·공모가는 투자설명서·주관사 공지로 최종 확인.");
+  return L.join("\n");
+}
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-bweek],[data-briefcopy],[data-briefprint]"); if(!b) return;
+  if(b.hasAttribute("data-bweek")){ const v=Number(b.dataset.bweek); S.bweek = v===0 ? 0 : (S.bweek||0)+v; renderTab(); return; }
+  if(b.hasAttribute("data-briefcopy")){ copyText(briefPlain()); return; }
+  if(b.hasAttribute("data-briefprint")){
+    if(FRAMED){ flash("인쇄는 지점 PC에서 연 대시보드에서 사용할 수 있습니다"); return; }
+    document.body.classList.add("pbrief"); window.print(); setTimeout(()=>document.body.classList.remove("pbrief"), 500); return; }
+});
+
 function todayTab(){
   const days = weekRange(S.week);
   const evs = calEvents().filter(e=>e.kind==="general");
@@ -1084,7 +1201,7 @@ function render(){
 }
 function renderTab(){
   $("#banners").innerHTML = banners();
-  const f = {home:todayTab,list:listTab,calendar:calTab,calc:calcTab,compare:compareTab,changes:changesTab,sources:sourcesTab}[S.tab] || todayTab;
+  const f = {home:todayTab,brief:briefTab,list:listTab,calendar:calTab,calc:calcTab,compare:compareTab,changes:changesTab,sources:sourcesTab}[S.tab] || todayTab;
   $("#tabbody").innerHTML = f();
   document.querySelectorAll(".nav button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===S.tab));
 }
