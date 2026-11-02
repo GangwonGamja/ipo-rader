@@ -35,15 +35,17 @@ def _scores(conn, uid):
         """SELECT i.run_id, i.score, i.computed_at FROM interest_scores i WHERE uid=? ORDER BY computed_at""", (uid,))]
 
 
-def _perf(offer, d1, last):
-    """공모가 대비 시초가·첫날 종가·최근 종가 수익률(KRX)."""
+def _perf(offer, d1, last, shares_total=None):
+    """공모가 대비 시초가·첫날 종가·최근 종가 수익률, 첫날 거래대금(KRX)."""
     if not (d1 or last):
         return None
     ret = lambda v: round(v / offer - 1, 4) if (offer and v) else None  # noqa: E731
     out = {"offer": offer}
     if d1:
+        proceeds = offer * shares_total if (offer and shares_total) else None
         out.update(day1_date=d1.get("date"), open=d1.get("open"), close1=d1.get("close"),
-                   open_ret=ret(d1.get("open")), close1_ret=ret(d1.get("close")))
+                   open_ret=ret(d1.get("open")), close1_ret=ret(d1.get("close")), day1_value=d1.get("value"),
+                   day1_value_x=round(d1["value"] / proceeds, 1) if (proceeds and d1.get("value")) else None)
     if last:
         out.update(last_date=last.get("date"), last=last.get("close"), last_ret=ret(last.get("close")), mktcap=last.get("mktcap"))
     return out
@@ -106,7 +108,8 @@ def company_rows(conn, today: date) -> list[dict]:
             "deposit_rate": (facts.get("offer.deposit_rate") or {}).get("value"),
             "syndicate": (facts.get("offer.syndicate") or {}).get("value"),
             "listing_krx": (facts.get("listing.krx") or {}).get("value"),
-            "perf": _perf(final, (facts.get("perf.day1") or {}).get("value"), (facts.get("perf.latest") or {}).get("value")),
+            "perf": _perf(final, (facts.get("perf.day1") or {}).get("value"), (facts.get("perf.latest") or {}).get("value"),
+                          (facts.get("offer.shares_total") or {}).get("value")),
         })
     return out
 

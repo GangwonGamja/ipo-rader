@@ -54,7 +54,7 @@ def list_equity_filings(today: date, lookback_days: int = MAX_LOOKBACK_DAYS) -> 
         d = _call("list", bgn_de=bgn, end_de=end, pblntf_ty="C", page_no=page, page_count=100)
         for it in d.get("list", []):
             nm = it.get("report_nm", "")
-            if "지분증권" not in nm and "철회" not in nm:
+            if "지분증권" not in nm and "철회" not in nm and "증권발행실적보고서" not in nm:
                 continue
             if it.get("corp_cls") and it["corp_cls"] not in IPO_CORP_CLS:
                 continue
@@ -201,6 +201,14 @@ def extract_doc_facts(text: str) -> dict:
     m = re.search(r"의무\s*보유\s*확약\s*(?:신청\s*)?비율\s*[:：]?\s*(?:은|는)?\s*(?:약\s*)?(\d{1,3}(?:\.\d+)?)\s*%", text)
     if m and float(m.group(1)) <= 100:
         out["demand.lockup_commit_ratio"] = float(m.group(1)) / 100
+    # 일반청약 경쟁률(증권발행실적보고서·정정 공고): '일반청약자/일반투자자' 이름표 바로 뒤 300자 안의 'N : 1'만 읽는다
+    for lab in re.finditer(r"일반\s*(?:청약자|투자자)", text):
+        m = re.search(r"경쟁률[^0-9]{0,40}([\d,]+(?:\.\d+)?)\s*(?::|대)\s*1|([\d,]+\.\d+)\s*(?::|대)\s*1", text[lab.end():lab.end() + 300])
+        if m:
+            v = float((m.group(1) or m.group(2)).replace(",", ""))
+            if 0 < v < 100000:
+                out["subscription.competition_ratio"] = v
+                break
     m = re.search(r"최소\s*청약\s*(?:주식\s*)?(?:수량|수|단위)\s*[:：]?\s*(?:은|는)?\s*([\d,]+)\s*주", text)
     if m:
         out["offer.min_subscription"] = int(m.group(1).replace(",", ""))

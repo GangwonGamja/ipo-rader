@@ -91,7 +91,8 @@ def daily(market: str, d: date) -> dict[str, dict]:
     return {code6(r.get("ISU_CD")): {"date": d.isoformat(), "name": r.get("ISU_NM"), "open": _num(r.get("TDD_OPNPRC")),
                                      "close": _num(r.get("TDD_CLSPRC")), "high": _num(r.get("TDD_HGPRC")),
                                      "low": _num(r.get("TDD_LWPRC")), "mktcap": _num(r.get("MKTCAP")),
-                                     "shares": _num(r.get("LIST_SHRS"))} for r in rows if r.get("ISU_CD")}
+                                     "shares": _num(r.get("LIST_SHRS")), "volume": _num(r.get("ACC_TRDVOL")),
+                                     "value": _num(r.get("ACC_TRDVAL"))} for r in rows if r.get("ISU_CD")}
 
 
 INDEXES = {"코스피": ("idx/kospi_dd_trd", "kr.kospi"), "코스피 200": ("idx/kospi_dd_trd", "kr.kospi200"),

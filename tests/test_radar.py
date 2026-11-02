@@ -1304,6 +1304,9 @@ class TestDartDocuments(unittest.TestCase):
             "demand.lockup_commit_ratio": 0.125, "offer.min_subscription": 10, "offer.deposit_rate": 0.5})
         self.assertEqual(dart.extract_doc_facts("매매개시예정일은 2026.11.04"), {"sched.listing": {"start": "2026-11-04", "end": "2026-11-04"}})
         self.assertEqual(dart.extract_doc_facts("공모가는 12,400원 2026년 11월 4일 상장, 경쟁률 9:1"), {})  # 이름표 없으면 안 읽음
+        self.assertEqual(dart.extract_doc_facts("청약 및 배정 현황 일반청약자 최초배정 550,000주 청약 1,234,567,890주 경쟁률 2,244.67 : 1"),
+                         {"subscription.competition_ratio": 2244.67})          # 증권발행실적보고서
+        self.assertEqual(dart.extract_doc_facts("일반청약자 배정 550,000주"), {})
         self.assertEqual(dart.clean_text("<P>상장&nbsp;예정일</P><TD>2026년 11월 04일</TD>"), "상장 예정일 2026년 11월 04일")
 
     def test_pipeline_reads_latest_filing_once(self):
@@ -1423,6 +1426,8 @@ class TestKRX(unittest.TestCase):
         from ipo_radar import export
         p = export._perf(12400, f["perf.day1"]["value"], f["perf.latest"]["value"])
         self.assertEqual((p["open_ret"], p["last_ret"]), (1.0, 0.5))
+        p2 = export._perf(12400, {"date": "2026-11-04", "open": 24800, "close": 21000, "value": 272800000000}, None, 2200000)
+        self.assertEqual(p2["day1_value_x"], 10.0)                  # 첫날 거래대금 = 공모금액(272.8억)의 10배
         self.assertIsNone(conn.execute("SELECT stock_code FROM companies WHERE name='영광'").fetchone()["stock_code"])
         conn.close()
 

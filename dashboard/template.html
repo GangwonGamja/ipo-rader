@@ -445,8 +445,8 @@ const BRIEF_ORDER = ["sched.listing","sched.subscription","sched.refund","sched.
 function demandOf(c){ return ((DATA.reports[c.uid]||{}).demand)||{}; }
 function priceTxt(c){ return c.price_final!=null ? `확정 ${won(c.price_final)}` : c.price_band ? `희망 ${Number(c.price_band.low).toLocaleString()}~${won(c.price_band.high)}` : "공모가 미정"; }
 function bandPos(c){ if(c.price_final==null||!c.price_band) return ""; const {low,high}=c.price_band; return c.price_final>high?"(상단 초과)":c.price_final===high?"(상단)":c.price_final<low?"(하단 미만)":c.price_final===low?"(하단)":"(범위 내)"; }
-function ratioTxt(c){ const d=demandOf(c); const parts=[]; if(d.competition_ratio!=null) parts.push(`수요예측 ${Number(d.competition_ratio).toLocaleString()}:1`); if(d.lockup_ratio!=null) parts.push(`확약 ${pct(d.lockup_ratio,1)}`); if(d.sub_ratio!=null) parts.push(`청약 ${Number(d.sub_ratio).toLocaleString()}:1`); return parts.join(" · "); }
-function perfTxt(c){ const p=c.perf; if(!p) return ""; const r=v=>v==null?null:`${v>=0?"+":""}${(v*100).toFixed(1)}%`; const a=[]; if(r(p.open_ret)) a.push(`시초가 ${r(p.open_ret)}`); if(r(p.close1_ret)) a.push(`첫날 종가 ${r(p.close1_ret)}`); if(r(p.last_ret)&&p.last_date!==p.day1_date) a.push(`최근 ${r(p.last_ret)}`); return a.length?`공모가 대비 ${a.join(", ")}`:""; }
+function ratioTxt(c){ const d=demandOf(c); const parts=[]; if(d.competition_ratio!=null) parts.push(`수요예측 ${Number(d.competition_ratio).toLocaleString()}:1`); if(d.lockup_ratio!=null) parts.push(`확약 ${pct(d.lockup_ratio,1)}`); if(d.sub_ratio!=null) parts.push(`일반청약 ${Number(d.sub_ratio).toLocaleString()}:1`); return parts.join(" · "); }
+function perfTxt(c){ const p=c.perf; if(!p) return ""; const r=v=>v==null?null:`${v>=0?"+":""}${(v*100).toFixed(1)}%`; const a=[]; if(r(p.open_ret)) a.push(`시초가 ${r(p.open_ret)}`); if(r(p.close1_ret)) a.push(`첫날 종가 ${r(p.close1_ret)}`); if(p.day1_value_x) a.push(`첫날 거래대금 공모금액의 ${p.day1_value_x}배`); if(r(p.last_ret)&&p.last_date!==p.day1_date) a.push(`최근 ${r(p.last_ret)}`); return a.length?`공모가 대비 ${a.join(", ")}`:""; }
 function briefData(off){
   const days = weekRange(off), lo = days[0], hi = days[6];
   const evs = calEvents().filter(e=>e.kind==="general" && e.start<=hi && (e.end||e.start)>=lo);
@@ -469,6 +469,7 @@ function briefSentences(off){
     if(d.competition_ratio!=null) a.push(`수요예측 ${Math.round(d.competition_ratio).toLocaleString()}:1`);
     const pos = bandPos(c); if(pos) a.push(pos.replace(/[()]/g,"")+" 확정");
     if(d.lockup_ratio!=null && d.lockup_ratio>=0.1) a.push(`확약 ${pct(d.lockup_ratio,0)}`);
+    if(d.sub_ratio!=null) a.push(`일반청약 ${Math.round(d.sub_ratio).toLocaleString()}:1`);
     return a.join(", "); };
   const top = active.filter(c=>c.demand_score!=null && c.demand_grade==="강함").sort((x,y)=>y.demand_score-x.demand_score).slice(0,2);
   L.push(top.length ? `주목: ${top.map(c=>`${c.name}(${why(c)})`).join(", ")} — 기관 수요가 강했던 종목` : "주목: 이번 주 청약·상장 종목 중 수요예측 결과가 강하게 나온 종목은 아직 없습니다.");
@@ -671,7 +672,7 @@ function listTab(){
       <td>${esc(c.sector||"미분류")}</td>
       <td><span class="chip ${STAGE_CLASS[c.stage]||"line"}">${esc(c.stage_label)}</span></td>
       <td class="num">${rng(c.sched["sched.subscription"])}</td>
-      <td>${price}</td><td>${mc}</td><td>${demandChip(c)}${BUZZ?`<span class="src">관심도 ${intr}</span>`:""}</td>
+      <td>${price}</td><td>${mc}</td><td>${demandChip(c)}${BUZZ?`<span class="src">관심도 ${intr}</span>`:(demandOf(c).sub_ratio!=null?`<span class="src">청약 ${Math.round(demandOf(c).sub_ratio).toLocaleString()}:1</span>`:"")}</td>
       <td>${fairChip(c)}</td>
       <td><span class="chip ${REL_CLASS[c.reliability]||"hold"}">${esc(c.reliability)}</span></td>
       <td class="num small">${esc(ago(c.last_updated))}${c.stale?` <span class="chip bad">오래됨</span>`:""}</td></tr>`;
@@ -970,6 +971,7 @@ function tabOffer(c, r, R){
     ${c.perf?`<section><h3>상장 후 성과 <span class="muted small" style="font-weight:400">한국거래소(KRX) · 공모가 ${c.perf.offer?won(c.perf.offer):"미확인"} 대비</span></h3><div class="tbl-wrap"><table class="kvt"><tbody>
       ${c.perf.open!=null?`<tr><th>시초가 <span class="muted small num">${esc(c.perf.day1_date||"")}</span></th><td><span class="num">${won(c.perf.open)}</span> ${retTxt(c.perf.open_ret)}</td></tr>`:""}
       ${c.perf.close1!=null?`<tr><th>상장 첫날 종가</th><td><span class="num">${won(c.perf.close1)}</span> ${retTxt(c.perf.close1_ret)}</td></tr>`:""}
+      ${c.perf.day1_value?`<tr><th>상장 첫날 거래대금</th><td><span class="num">${krw(c.perf.day1_value)}</span>${c.perf.day1_value_x?` <span class="muted small">공모금액의 ${c.perf.day1_value_x}배</span>`:""}</td></tr>`:""}
       ${c.perf.last!=null?`<tr><th>최근 종가 <span class="muted small num">${esc(c.perf.last_date||"")}</span></th><td><span class="num">${won(c.perf.last)}</span> ${retTxt(c.perf.last_ret)}${c.perf.mktcap?` <span class="muted small">시가총액 ${krw(c.perf.mktcap)}</span>`:""}</td></tr>`:""}
       ${c.listing_krx?`<tr><th>상장 정보</th><td>${esc(c.listing_krx.market)} <span class="num">${esc(c.listing_krx.code)}</span> · 상장일 <span class="num">${esc(c.listing_krx.list_dd)}</span>${c.listing_krx.shares?` · 상장주식수 <span class="num">${Number(c.listing_krx.shares).toLocaleString()}주</span>`:""}</td></tr>`:""}
     </tbody></table></div><p class="muted small">과거 수익률이며 앞으로의 수익을 뜻하지 않습니다.</p></section>`:""}
